@@ -78,6 +78,7 @@ export default function Home() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
   const [form, setForm] = useState<FormData>(emptyForm)
 
   async function fetchAll(quiet = false) {
@@ -136,7 +137,10 @@ export default function Home() {
     if (!error) {
       setShowForm(false)
       setForm(emptyForm)
+      setFormError(null)
       fetchAll(true)
+    } else {
+      setFormError(error.message)
     }
     setSubmitting(false)
   }
@@ -144,6 +148,7 @@ export default function Home() {
   function closeForm() {
     setShowForm(false)
     setForm(emptyForm)
+    setFormError(null)
   }
 
   return (
@@ -302,23 +307,23 @@ export default function Home() {
             </div>
             <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1.5">Tag Number</label>
+                <label className="block text-xs font-medium text-zinc-800 mb-1.5">Tag Number</label>
                 <input
                   required
                   value={form.tag}
                   onChange={e => setForm({ ...form, tag: e.target.value })}
                   placeholder="e.g. ZF-001"
-                  className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm font-[family-name:var(--font-dm-mono)] focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20"
+                  className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm text-zinc-900 font-[family-name:var(--font-dm-mono)] focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1.5">Sex</label>
+                  <label className="block text-xs font-medium text-zinc-800 mb-1.5">Sex</label>
                   <select
                     value={form.sex}
                     onChange={e => setForm({ ...form, sex: e.target.value })}
-                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20 bg-white"
+                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20 bg-white"
                   >
                     <option value="cow">Cow</option>
                     <option value="bull">Bull</option>
@@ -327,11 +332,11 @@ export default function Home() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-600 mb-1.5">Paddock</label>
+                  <label className="block text-xs font-medium text-zinc-800 mb-1.5">Paddock</label>
                   <select
                     value={form.paddock_id}
                     onChange={e => setForm({ ...form, paddock_id: e.target.value })}
-                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20 bg-white"
+                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20 bg-white"
                   >
                     <option value="">None</option>
                     {paddocks.map(p => (
@@ -342,35 +347,41 @@ export default function Home() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1.5">Breed</label>
+                <label className="block text-xs font-medium text-zinc-800 mb-1.5">Breed</label>
                 <input
                   value={form.breed}
                   onChange={e => setForm({ ...form, breed: e.target.value })}
                   placeholder="e.g. Angus, Hereford"
-                  className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20"
+                  className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1.5">Date of Birth</label>
+                <label className="block text-xs font-medium text-zinc-800 mb-1.5">Date of Birth</label>
                 <input
                   type="date"
                   value={form.dob}
                   onChange={e => setForm({ ...form, dob: e.target.value })}
-                  className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20"
+                  className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1.5">Notes</label>
+                <label className="block text-xs font-medium text-zinc-800 mb-1.5">Notes</label>
                 <textarea
                   value={form.notes}
                   onChange={e => setForm({ ...form, notes: e.target.value })}
                   placeholder="Optional notes…"
                   rows={2}
-                  className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20 resize-none"
+                  className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20 resize-none"
                 />
               </div>
+
+              {formError && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                  {formError}
+                </p>
+              )}
 
               <button
                 type="submit"
