@@ -19,6 +19,7 @@ type CattleRow = {
   dob: string | null
   notes: string | null
   active: boolean
+  paddock_id: string | null
   created_at: string
   paddocks: { name: string } | null
   dipping_records: DippingRecord[]
@@ -77,7 +78,9 @@ export default function Home() {
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [form, setForm] = useState<FormData>(emptyForm)
 
@@ -88,7 +91,7 @@ export default function Home() {
       supabase
         .from('cattle')
         .select(`
-          id, tag, sex, breed, dob, notes, active, created_at,
+          id, tag, sex, breed, dob, notes, active, paddock_id, created_at,
           paddocks!paddock_id ( name ),
           dipping_records ( dipping_sessions ( session_date ) )
         `)
@@ -123,21 +126,54 @@ export default function Home() {
     [cattle, filter, search]
   )
 
+  function openAdd() {
+    setForm(emptyForm)
+    setEditingId(null)
+    setFormError(null)
+    setShowForm(true)
+  }
+
+  function openEdit(animal: CattleRow) {
+    setForm({
+      tag: animal.tag,
+      sex: animal.sex,
+      breed: animal.breed ?? '',
+      paddock_id: animal.paddock_id ?? '',
+      dob: animal.dob ?? '',
+      notes: animal.notes ?? '',
+    })
+    setEditingId(animal.id)
+    setFormError(null)
+    setShowForm(true)
+  }
+
+  function closeForm() {
+    setShowForm(false)
+    setEditingId(null)
+    setForm(emptyForm)
+    setFormError(null)
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
-    const { error } = await supabase.from('cattle').insert([{
+    setFormError(null)
+
+    const payload = {
       tag: form.tag,
       sex: form.sex,
       breed: form.breed || null,
       paddock_id: form.paddock_id || null,
       dob: form.dob || null,
       notes: form.notes || null,
-    }])
+    }
+
+    const { error } = editingId
+      ? await supabase.from('cattle').update(payload).eq('id', editingId)
+      : await supabase.from('cattle').insert([payload])
+
     if (!error) {
-      setShowForm(false)
-      setForm(emptyForm)
-      setFormError(null)
+      closeForm()
       fetchAll(true)
     } else {
       setFormError(error.message)
@@ -145,10 +181,20 @@ export default function Home() {
     setSubmitting(false)
   }
 
-  function closeForm() {
-    setShowForm(false)
-    setForm(emptyForm)
-    setFormError(null)
+  async function handleDelete() {
+    if (!editingId) return
+    setDeleting(true)
+    const { error } = await supabase
+      .from('cattle')
+      .update({ active: false })
+      .eq('id', editingId)
+    if (!error) {
+      closeForm()
+      fetchAll(true)
+    } else {
+      setFormError(error.message)
+    }
+    setDeleting(false)
   }
 
   return (
@@ -237,9 +283,10 @@ export default function Home() {
                 .filter(Boolean)
                 .join(' · ')
               return (
-                <div
+                <button
                   key={animal.id}
-                  className="bg-white rounded-2xl border border-zinc-100 px-4 py-3.5 flex items-center justify-between shadow-sm"
+                  onClick={() => openEdit(animal)}
+                  className="w-full bg-white rounded-2xl border border-zinc-100 px-4 py-3.5 flex items-center justify-between shadow-sm hover:border-zinc-300 hover:shadow-md active:scale-[0.99] transition-all text-left cursor-pointer"
                 >
                   <div className="min-w-0 mr-3">
                     <span className="block text-base font-medium text-zinc-900 font-[family-name:var(--font-dm-mono)] leading-tight">
@@ -247,10 +294,13 @@ export default function Home() {
                     </span>
                     <p className="text-xs text-zinc-400 mt-0.5 capitalize truncate">{meta}</p>
                   </div>
-                  <span className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium ${DIP_CLASS[status]}`}>
-                    {DIP_LABEL[status]}
-                  </span>
-                </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${DIP_CLASS[status]}`}>
+                      {DIP_LABEL[status]}
+                    </span>
+                    <ChevronIcon />
+                  </div>
+                </button>
               )
             })
           )}
@@ -259,7 +309,7 @@ export default function Home() {
 
       {/* ── Floating add button ── */}
       <button
-        onClick={() => setShowForm(true)}
+        onClick={openAdd}
         className="fixed bottom-[76px] right-4 w-14 h-14 bg-[#3B6D11] rounded-full shadow-xl flex items-center justify-center text-white z-30 hover:bg-[#2d5409] active:scale-95 transition-all cursor-pointer"
         aria-label="Add cattle"
       >
@@ -289,15 +339,19 @@ export default function Home() {
         ))}
       </nav>
 
-      {/* ── Add Cattle modal ── */}
+      {/* ── Add / Edit modal ── */}
       {showForm && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4"
           onClick={e => e.target === e.currentTarget && closeForm()}
         >
           <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+
+            {/* Header */}
             <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
-              <h2 className="font-semibold text-sm text-zinc-900">Add Cattle</h2>
+              <h2 className="font-semibold text-sm text-zinc-900">
+                {editingId ? 'Edit Cattle' : 'Add Cattle'}
+              </h2>
               <button
                 onClick={closeForm}
                 className="text-zinc-400 hover:text-zinc-700 text-xl leading-none cursor-pointer w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-100"
@@ -305,7 +359,9 @@ export default function Home() {
                 ×
               </button>
             </div>
+
             <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
+
               <div>
                 <label className="block text-xs font-medium text-zinc-800 mb-1.5">Tag Number</label>
                 <input
@@ -385,11 +441,23 @@ export default function Home() {
 
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || deleting}
                 className="w-full bg-[#3B6D11] text-white text-sm font-medium py-3 rounded-full hover:bg-[#2d5409] transition-colors disabled:opacity-50 cursor-pointer"
               >
-                {submitting ? 'Saving…' : 'Save Animal'}
+                {submitting ? 'Saving…' : editingId ? 'Save Changes' : 'Save Animal'}
               </button>
+
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={submitting || deleting}
+                  className="w-full text-red-500 text-sm py-2 rounded-full hover:bg-red-50 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {deleting ? 'Removing…' : 'Remove from registry'}
+                </button>
+              )}
+
             </form>
           </div>
         </div>
@@ -420,6 +488,14 @@ function SearchIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <circle cx="11" cy="11" r="8" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  )
+}
+
+function ChevronIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-300">
+      <polyline points="9 18 15 12 9 6" />
     </svg>
   )
 }
