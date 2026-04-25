@@ -112,6 +112,8 @@ export default function Home() {
     total: cattle.length,
     cows: cattle.filter(c => c.sex === 'cow').length,
     bulls: cattle.filter(c => c.sex === 'bull').length,
+    heifers: cattle.filter(c => c.sex === 'heifer').length,
+    steers: cattle.filter(c => c.sex === 'steer').length,
     young: cattle.filter(c => c.sex === 'heifer' || c.sex === 'steer').length,
   }), [cattle])
 
@@ -235,6 +237,16 @@ export default function Home() {
             </div>
           ))}
         </div>
+
+        {/* ── Herd breakdown chart ── */}
+        {!loading && (
+          <DonutChart
+            cows={stats.cows}
+            bulls={stats.bulls}
+            heifers={stats.heifers}
+            steers={stats.steers}
+          />
+        )}
 
         {/* ── Search ── */}
         <div className="px-4 mt-4 relative">
@@ -462,6 +474,106 @@ export default function Home() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Donut chart ──────────────────────────────────────────────────────────────
+
+const SEG_COLORS = {
+  cow: '#3B6D11',
+  bull: '#1C3B08',
+  heifer: '#7BAD3E',
+  steer: '#C5E09E',
+}
+
+function DonutChart({ cows, bulls, heifers, steers }: {
+  cows: number; bulls: number; heifers: number; steers: number
+}) {
+  const total = cows + bulls + heifers + steers
+
+  const segments = [
+    { key: 'cow',    label: 'Cows',    value: cows,    color: SEG_COLORS.cow },
+    { key: 'bull',   label: 'Bulls',   value: bulls,   color: SEG_COLORS.bull },
+    { key: 'heifer', label: 'Heifers', value: heifers, color: SEG_COLORS.heifer },
+    { key: 'steer',  label: 'Steers',  value: steers,  color: SEG_COLORS.steer },
+  ]
+
+  const SIZE = 160
+  const cx = SIZE / 2
+  const cy = SIZE / 2
+  const R = 68
+  const r = 46
+
+  function arc(startAngle: number, endAngle: number): string {
+    const cos = Math.cos, sin = Math.sin
+    const x1  = cx + R * cos(startAngle), y1  = cy + R * sin(startAngle)
+    const x2  = cx + R * cos(endAngle),   y2  = cy + R * sin(endAngle)
+    const ix1 = cx + r * cos(startAngle), iy1 = cy + r * sin(startAngle)
+    const ix2 = cx + r * cos(endAngle),   iy2 = cy + r * sin(endAngle)
+    const large = endAngle - startAngle > Math.PI ? 1 : 0
+    return `M ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2} L ${ix2} ${iy2} A ${r} ${r} 0 ${large} 0 ${ix1} ${iy1} Z`
+  }
+
+  const active = segments.filter(s => s.value > 0)
+  const GAP = active.length > 1 ? 0.04 : 0
+  let cursor = -Math.PI / 2
+  const arcs = active.map(s => {
+    const span = (s.value / total) * 2 * Math.PI
+    const start = cursor + GAP / 2
+    const end   = cursor + span - GAP / 2
+    cursor += span
+    return { ...s, start, end, span }
+  })
+
+  return (
+    <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm mx-4 mt-3 p-4">
+      <p className="text-xs text-zinc-400 uppercase tracking-widest mb-4">Herd Breakdown</p>
+      <div className="flex items-center gap-4">
+
+        {/* SVG donut */}
+        <div className="relative shrink-0">
+          <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+            {total === 0 ? (
+              <circle cx={cx} cy={cy} r={(R + r) / 2} fill="none"
+                stroke="#f4f4f5" strokeWidth={R - r} />
+            ) : arcs.map(s =>
+              s.span >= 2 * Math.PI - 0.001 ? (
+                <circle key={s.key} cx={cx} cy={cy} r={(R + r) / 2} fill="none"
+                  stroke={s.color} strokeWidth={R - r} />
+              ) : (
+                <path key={s.key} d={arc(s.start, s.end)} fill={s.color} />
+              )
+            )}
+            <circle cx={cx} cy={cy} r={r - 1} fill="white" />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-2xl font-bold text-zinc-900 leading-none">{total}</span>
+            <span className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wider">total</span>
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 flex-1">
+          {segments.map(s => {
+            const pct = total > 0 ? Math.round((s.value / total) * 100) : 0
+            return (
+              <div key={s.key} className="flex items-start gap-2">
+                <span className="mt-[3px] w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: s.color }} />
+                <div>
+                  <p className="text-xs text-zinc-400 leading-none">{s.label}</p>
+                  <p className="text-sm font-bold text-zinc-900 mt-0.5 leading-none">
+                    {s.value}
+                    <span className="text-xs font-normal text-zinc-400 ml-1">{pct}%</span>
+                  </p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+      </div>
     </div>
   )
 }
