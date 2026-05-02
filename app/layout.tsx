@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { Syne, DM_Mono } from "next/font/google";
+import { Outfit, DM_Mono } from "next/font/google";
 import "./globals.css";
 
-const syne = Syne({
+const outfit = Outfit({
   variable: "--font-syne",
   subsets: ["latin"],
 });
@@ -26,7 +26,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${syne.variable} ${dmMono.variable} h-full antialiased`}
+      className={`${outfit.variable} ${dmMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
