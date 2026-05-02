@@ -33,6 +33,10 @@ export default function FinancePage() {
   const [tab, setTab] = useState<Tab>('summary')
   const [addOpen, setAddOpen] = useState<'revenue' | 'expense' | null>(null)
   const [monthFilter, setMonthFilter] = useState<string>(() => new Date().toISOString().slice(0, 7))
+  const [filterYear, filterMonth] = monthFilter.split('-').map(Number)
+  function setYearMonth(year: number, month: number) {
+    setMonthFilter(`${year}-${String(month).padStart(2, '0')}`)
+  }
 
   async function load() {
     const [revSnap, expSnap] = await Promise.all([
@@ -78,9 +82,19 @@ export default function FinancePage() {
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
 
         {/* Month selector */}
-        <div className="flex items-center gap-2">
-          <input type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)}
-            className="flex-1 border border-zinc-300 rounded-xl px-3 py-2 text-sm text-zinc-900 bg-white" />
+        <div className="flex gap-2">
+          <select value={filterMonth} onChange={e => setYearMonth(filterYear, Number(e.target.value))}
+            className="flex-1 border border-zinc-300 rounded-xl px-3 py-2 text-sm font-medium text-zinc-900 bg-white appearance-none">
+            {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
+              <option key={m} value={i + 1}>{m}</option>
+            ))}
+          </select>
+          <select value={filterYear} onChange={e => setYearMonth(Number(e.target.value), filterMonth)}
+            className="w-28 border border-zinc-300 rounded-xl px-3 py-2 text-sm font-medium text-zinc-900 bg-white appearance-none">
+            {[2024, 2025, 2026, 2027].map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
         </div>
 
         {/* P&L cards */}
