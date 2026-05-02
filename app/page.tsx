@@ -403,7 +403,7 @@ export default function Home() {
       {/* ── Floating add button ── */}
       <button
         onClick={openAdd}
-        className="fixed bottom-[128px] right-4 w-14 h-14 bg-[#3B6D11] rounded-full shadow-xl flex items-center justify-center text-white z-30 hover:bg-[#2d5409] active:scale-95 transition-all cursor-pointer"
+        className="fixed bottom-[106px] right-4 w-14 h-14 bg-[#3B6D11] rounded-full shadow-xl flex items-center justify-center text-white z-30 hover:bg-[#2d5409] active:scale-95 transition-all cursor-pointer"
         aria-label="Add cattle"
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -413,7 +413,7 @@ export default function Home() {
       </button>
 
       {/* ── Bottom nav ── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-zinc-100 h-[108px] flex">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-zinc-100 h-[86px] flex">
         {([
           { label: 'Cattle', active: true, icon: <TagNavIcon /> },
           { label: 'Paddocks', active: false, icon: <GridNavIcon /> },
@@ -422,7 +422,7 @@ export default function Home() {
         ] as const).map(item => (
           <button
             key={item.label}
-            className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] tracking-wide transition-colors py-6 ${
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] tracking-wide transition-colors py-[19px] ${
               item.active ? 'text-[#3B6D11]' : 'text-zinc-400'
             }`}
           >
