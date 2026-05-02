@@ -1,7 +1,18 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../lib/supabase'
+import {
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc,
+  query,
+  where,
+  serverTimestamp,
+} from 'firebase/firestore'
+import { db } from '../lib/firebase'
+import { seedTestData } from '../lib/seed'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,23 +98,53 @@ export default function Home() {
   async function fetchAll(quiet = false) {
     quiet ? setSyncing(true) : setLoading(true)
 
-    const [{ data: cattleData }, { data: paddockData }] = await Promise.all([
-      supabase
-        .from('cattle')
-        .select(`
-          id, tag, sex, breed, dob, notes, active, paddock_id, created_at,
-          paddocks!paddock_id ( name ),
-          dipping_records ( dipping_sessions ( session_date ) )
-        `)
-        .eq('active', true)
-        .order('created_at', { ascending: false }),
-      supabase.from('paddocks').select('id, name').order('name'),
-    ])
+    try {
+      const [cattleSnap, paddocksSnap] = await Promise.all([
+        getDocs(query(collection(db, 'cattle'), where('active', '==', true))),
+        getDocs(collection(db, 'paddocks')),
+      ])
 
-    if (cattleData) setCattle(cattleData as unknown as CattleRow[])
-    if (paddockData) setPaddocks(paddockData)
-    setLoading(false)
-    setSyncing(false)
+      const paddocksList = paddocksSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Paddock))
+        .sort((a, b) => a.name.localeCompare(b.name))
+
+      const cattleList = await Promise.all(
+        cattleSnap.docs.map(async (cattleDoc) => {
+          const dippingSnap = await getDocs(
+            collection(db, 'cattle', cattleDoc.id, 'dipping_records')
+          )
+          const dipping_records: DippingRecord[] = dippingSnap.docs.map(d => ({
+            dipping_sessions: { session_date: d.data().session_date as string },
+          }))
+          const data = cattleDoc.data()
+          const paddock = paddocksList.find(p => p.id === data.paddock_id) ?? null
+          return {
+            id: cattleDoc.id,
+            tag: data.tag as string,
+            sex: data.sex as CattleRow['sex'],
+            breed: (data.breed as string) ?? null,
+            dob: (data.dob as string) ?? null,
+            notes: (data.notes as string) ?? null,
+            active: data.active as boolean,
+            paddock_id: (data.paddock_id as string) ?? null,
+            created_at: data.created_at?.toDate?.()?.toISOString() ?? new Date().toISOString(),
+            paddocks: paddock ? { name: paddock.name } : null,
+            dipping_records,
+          } as CattleRow
+        })
+      )
+
+      // Sort by created_at descending client-side
+      cattleList.sort((a, b) => b.created_at.localeCompare(a.created_at))
+
+      setPaddocks(paddocksList)
+      setCattle(cattleList)
+    } catch (err) {
+      console.error('fetchAll failed:', err)
+    } finally {
+      setLoading(false)
+      setSyncing(false)
+    }
   }
 
   useEffect(() => { fetchAll() }, [])
@@ -170,15 +211,20 @@ export default function Home() {
       notes: form.notes || null,
     }
 
-    const { error } = editingId
-      ? await supabase.from('cattle').update(payload).eq('id', editingId)
-      : await supabase.from('cattle').insert([payload])
-
-    if (!error) {
+    try {
+      if (editingId) {
+        await updateDoc(doc(db, 'cattle', editingId), payload)
+      } else {
+        await addDoc(collection(db, 'cattle'), {
+          ...payload,
+          active: true,
+          created_at: serverTimestamp(),
+        })
+      }
       closeForm()
       fetchAll(true)
-    } else {
-      setFormError(error.message)
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'An error occurred')
     }
     setSubmitting(false)
   }
@@ -186,15 +232,12 @@ export default function Home() {
   async function handleDelete() {
     if (!editingId) return
     setDeleting(true)
-    const { error } = await supabase
-      .from('cattle')
-      .update({ active: false })
-      .eq('id', editingId)
-    if (!error) {
+    try {
+      await updateDoc(doc(db, 'cattle', editingId), { active: false })
       closeForm()
       fetchAll(true)
-    } else {
-      setFormError(error.message)
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'An error occurred')
     }
     setDeleting(false)
   }
@@ -285,8 +328,16 @@ export default function Home() {
               <div key={i} className="h-[62px] bg-white rounded-2xl animate-pulse border border-zinc-100" />
             ))
           ) : filtered.length === 0 ? (
-            <div className="text-center py-16 text-zinc-400 text-sm">
-              {cattle.length === 0 ? 'No cattle recorded yet.' : 'No results match your filter.'}
+            <div className="text-center py-16 text-zinc-400 text-sm space-y-3">
+              <p>{cattle.length === 0 ? 'No cattle recorded yet.' : 'No results match your filter.'}</p>
+              {cattle.length === 0 && (
+                <button
+                  onClick={() => seedTestData().then(() => fetchAll())}
+                  className="text-xs text-[#3B6D11] underline underline-offset-2"
+                >
+                  Load sample data
+                </button>
+              )}
             </div>
           ) : (
             filtered.map(animal => {
