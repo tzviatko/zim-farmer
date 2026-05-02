@@ -2,7 +2,7 @@ import { initializeApp, getApps } from 'firebase/app'
 import {
   initializeFirestore,
   persistentLocalCache,
-  persistentMultipleTabManager,
+  persistentSingleTabManager,
   getFirestore,
 } from 'firebase/firestore'
 
@@ -20,9 +20,12 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 function createDb() {
   if (typeof window === 'undefined') return getFirestore(app)
   try {
+    // Single-tab manager with forceOwnership avoids the coordination overhead of
+    // multi-tab and ensures this tab always holds the IndexedDB lease, even after
+    // the app is backgrounded or the previous tab crashed.
     return initializeFirestore(app, {
       localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
+        tabManager: persistentSingleTabManager({ forceOwnership: true }),
       }),
     })
   } catch {

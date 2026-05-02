@@ -213,7 +213,7 @@ export default function Home() {
 
   function openEdit(animal: CattleRow) {
     setForm({
-      tag: animal.tag,
+      tag: formatTag(animal.tag),
       sex: animal.sex,
       breed: animal.breed ?? '',
       paddock_id: animal.paddock_id ?? '',
@@ -258,8 +258,13 @@ export default function Home() {
       }
       closeForm()
       fetchAll(true)
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'An error occurred')
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code
+      if (code === 'unavailable') {
+        setFormError('Device is offline and local storage is unavailable. Please reload the app while connected, then try again.')
+      } else {
+        setFormError(err instanceof Error ? err.message : 'An error occurred')
+      }
     }
     setSubmitting(false)
   }
@@ -271,8 +276,13 @@ export default function Home() {
       await updateDoc(doc(db, 'cattle', editingId), { active: false })
       closeForm()
       fetchAll(true)
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'An error occurred')
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code
+      if (code === 'unavailable') {
+        setFormError('Device is offline and local storage is unavailable. Please reload the app while connected, then try again.')
+      } else {
+        setFormError(err instanceof Error ? err.message : 'An error occurred')
+      }
     }
     setDeleting(false)
   }
