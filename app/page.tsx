@@ -100,6 +100,16 @@ export default function Home() {
   const [formError, setFormError] = useState<string | null>(null)
   const [form, setForm] = useState<FormData>(emptyForm)
   const [breedFilter, setBreedFilter] = useState<string | null>(null)
+  const [isOnline, setIsOnline] = useState(true)
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine)
+    const up = () => setIsOnline(true)
+    const down = () => setIsOnline(false)
+    window.addEventListener('online', up)
+    window.addEventListener('offline', down)
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down) }
+  }, [])
 
   async function fetchAll(quiet = false) {
     quiet ? setSyncing(true) : setLoading(true)
@@ -286,6 +296,14 @@ export default function Home() {
           </button>
         </div>
       </header>
+
+      {!isOnline && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5">
+          <p className="text-xs text-amber-700 text-center">
+            You&apos;re offline — changes are saved locally and will sync when you reconnect.
+          </p>
+        </div>
+      )}
 
       <div className="max-w-lg mx-auto pb-[220px]">
 

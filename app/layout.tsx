@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Urbanist, DM_Mono } from "next/font/google";
+import SwRegister from "./sw-register";
 import "./globals.css";
 
 const urbanist = Urbanist({
@@ -18,6 +19,12 @@ export const metadata: Metadata = {
   description: "Cattle registry",
 };
 
+export const viewport: Viewport = {
+  themeColor: "#3B6D11",
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,7 +35,10 @@ export default function RootLayout({
       lang="en"
       className={`${urbanist.variable} ${dmMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <SwRegister />
+      </body>
     </html>
   );
 }
