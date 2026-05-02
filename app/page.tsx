@@ -79,6 +79,11 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 const emptyForm: FormData = { tag: '', sex: 'cow', breed: '', paddock_id: '', dob: '', notes: '' }
 
+function formatTag(tag: string): string {
+  const digits = tag.replace(/\D/g, '')
+  return (digits || '0').padStart(4, '0').slice(-4)
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -94,6 +99,7 @@ export default function Home() {
   const [deleting, setDeleting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [form, setForm] = useState<FormData>(emptyForm)
+  const [breedFilter, setBreedFilter] = useState<string | null>(null)
 
   async function fetchAll(quiet = false) {
     quiet ? setSyncing(true) : setLoading(true)
@@ -158,16 +164,35 @@ export default function Home() {
     young: cattle.filter(c => c.sex === 'heifer' || c.sex === 'steer').length,
   }), [cattle])
 
+  const breedStats = useMemo(() => {
+    const map = new Map<string, number>()
+    cattle.forEach(c => {
+      const breed = c.breed || 'Unknown'
+      map.set(breed, (map.get(breed) || 0) + 1)
+    })
+    return Array.from(map.entries())
+      .map(([breed, count]) => ({ breed, count }))
+      .sort((a, b) => b.count - a.count)
+  }, [cattle])
+
   const filtered = useMemo(() =>
     cattle
       .filter(c => filter === 'all' || c.sex === filter)
+      .filter(c => !breedFilter || c.breed === breedFilter)
       .filter(c => {
         if (!search) return true
         const q = search.toLowerCase()
         return c.tag.toLowerCase().includes(q) || (c.breed?.toLowerCase().includes(q) ?? false)
       }),
-    [cattle, filter, search]
+    [cattle, filter, breedFilter, search]
   )
+
+  const displayStats = useMemo(() => ({
+    total: filtered.length,
+    cows: filtered.filter(c => c.sex === 'cow').length,
+    bulls: filtered.filter(c => c.sex === 'bull').length,
+    young: filtered.filter(c => c.sex === 'heifer' || c.sex === 'steer').length,
+  }), [filtered])
 
   function openAdd() {
     setForm(emptyForm)
@@ -262,15 +287,15 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto pb-36">
+      <div className="max-w-lg mx-auto pb-[220px]">
 
         {/* ── Stat cards ── */}
         <div className="grid grid-cols-2 gap-3 px-4 pt-4">
           {([
-            { label: 'Total', value: stats.total },
-            { label: 'Cows', value: stats.cows },
-            { label: 'Bulls', value: stats.bulls },
-            { label: 'Young Stock', value: stats.young },
+            { label: 'Total', value: displayStats.total },
+            { label: 'Cows', value: displayStats.cows },
+            { label: 'Bulls', value: displayStats.bulls },
+            { label: 'Young Stock', value: displayStats.young },
           ] as const).map(s => (
             <div key={s.label} className="bg-white rounded-2xl border border-zinc-100 p-4 shadow-sm">
               <p className="text-xs text-zinc-400 uppercase tracking-widest mb-1">{s.label}</p>
@@ -288,6 +313,11 @@ export default function Home() {
             bulls={stats.bulls}
             heifers={stats.heifers}
             steers={stats.steers}
+            activeTypeFilter={filter}
+            onTypeFilterChange={(f) => { setFilter(f); setBreedFilter(null) }}
+            breedData={breedStats}
+            activeBreedFilter={breedFilter}
+            onBreedFilterChange={(b) => { setBreedFilter(b); setFilter('all') }}
           />
         )}
 
@@ -353,7 +383,7 @@ export default function Home() {
                 >
                   <div className="min-w-0 mr-3">
                     <span className="block text-base font-medium text-zinc-900 font-[family-name:var(--font-dm-mono)] leading-tight">
-                      {animal.tag}
+                      {formatTag(animal.tag)}
                     </span>
                     <p className="text-xs text-zinc-400 mt-0.5 capitalize truncate">{meta}</p>
                   </div>
@@ -373,7 +403,7 @@ export default function Home() {
       {/* ── Floating add button ── */}
       <button
         onClick={openAdd}
-        className="fixed bottom-[76px] right-4 w-14 h-14 bg-[#3B6D11] rounded-full shadow-xl flex items-center justify-center text-white z-30 hover:bg-[#2d5409] active:scale-95 transition-all cursor-pointer"
+        className="fixed bottom-[128px] right-4 w-14 h-14 bg-[#3B6D11] rounded-full shadow-xl flex items-center justify-center text-white z-30 hover:bg-[#2d5409] active:scale-95 transition-all cursor-pointer"
         aria-label="Add cattle"
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -383,7 +413,7 @@ export default function Home() {
       </button>
 
       {/* ── Bottom nav ── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-zinc-100 h-[60px] flex">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-zinc-100 h-[108px] flex">
         {([
           { label: 'Cattle', active: true, icon: <TagNavIcon /> },
           { label: 'Paddocks', active: false, icon: <GridNavIcon /> },
@@ -392,7 +422,7 @@ export default function Home() {
         ] as const).map(item => (
           <button
             key={item.label}
-            className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] tracking-wide transition-colors ${
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] tracking-wide transition-colors py-6 ${
               item.active ? 'text-[#3B6D11]' : 'text-zinc-400'
             }`}
           >
@@ -431,7 +461,7 @@ export default function Home() {
                   required
                   value={form.tag}
                   onChange={e => setForm({ ...form, tag: e.target.value })}
-                  placeholder="e.g. ZF-001"
+                  placeholder="e.g. 0042"
                   className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm text-zinc-900 font-[family-name:var(--font-dm-mono)] focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20"
                 />
               </div>
@@ -538,17 +568,59 @@ const SEG_COLORS = {
   steer: '#C5E09E',
 }
 
-function DonutChart({ cows, bulls, heifers, steers }: {
-  cows: number; bulls: number; heifers: number; steers: number
-}) {
-  const total = cows + bulls + heifers + steers
+const BREED_PALETTE = [
+  '#3B6D11', '#1C3B08', '#7BAD3E', '#C5E09E',
+  '#5B8C2A', '#A8D46F', '#2A5C0A', '#91C462',
+  '#4A7C1E', '#D4EBB0',
+]
 
-  const segments = [
-    { key: 'cow',    label: 'Cows',    value: cows,    color: SEG_COLORS.cow },
-    { key: 'bull',   label: 'Bulls',   value: bulls,   color: SEG_COLORS.bull },
-    { key: 'heifer', label: 'Heifers', value: heifers, color: SEG_COLORS.heifer },
-    { key: 'steer',  label: 'Steers',  value: steers,  color: SEG_COLORS.steer },
+function DonutChart({
+  cows, bulls, heifers, steers,
+  activeTypeFilter, onTypeFilterChange,
+  breedData, activeBreedFilter, onBreedFilterChange,
+}: {
+  cows: number; bulls: number; heifers: number; steers: number
+  activeTypeFilter: Filter
+  onTypeFilterChange: (f: Filter) => void
+  breedData: { breed: string; count: number }[]
+  activeBreedFilter: string | null
+  onBreedFilterChange: (breed: string | null) => void
+}) {
+  const [tab, setTab] = useState<'type' | 'breed'>('type')
+
+  function switchTab(t: 'type' | 'breed') {
+    setTab(t)
+    if (t === 'breed') onTypeFilterChange('all')
+    if (t === 'type') onBreedFilterChange(null)
+  }
+
+  const typeSegments = [
+    { key: 'cow' as Filter,    label: 'Cows',    value: cows,    color: SEG_COLORS.cow },
+    { key: 'bull' as Filter,   label: 'Bulls',   value: bulls,   color: SEG_COLORS.bull },
+    { key: 'heifer' as Filter, label: 'Heifers', value: heifers, color: SEG_COLORS.heifer },
+    { key: 'steer' as Filter,  label: 'Steers',  value: steers,  color: SEG_COLORS.steer },
   ]
+
+  const breedSegments = breedData.map((b, i) => ({
+    key: b.breed,
+    label: b.breed,
+    value: b.count,
+    color: BREED_PALETTE[i % BREED_PALETTE.length],
+  }))
+
+  const segments = tab === 'type' ? typeSegments : breedSegments
+  const total = segments.reduce((s, seg) => s + seg.value, 0)
+  const activeKey = tab === 'type'
+    ? (activeTypeFilter === 'all' ? null : activeTypeFilter as string)
+    : activeBreedFilter
+
+  function handleSegmentClick(key: string) {
+    if (tab === 'type') {
+      onTypeFilterChange(activeTypeFilter === key ? 'all' : key as Filter)
+    } else {
+      onBreedFilterChange(activeBreedFilter === key ? null : key)
+    }
+  }
 
   const SIZE = 160
   const cx = SIZE / 2
@@ -579,7 +651,23 @@ function DonutChart({ cows, bulls, heifers, steers }: {
 
   return (
     <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm mx-4 mt-3 p-4">
-      <p className="text-xs text-zinc-400 uppercase tracking-widest mb-4">Herd Breakdown</p>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs text-zinc-400 uppercase tracking-widest">Herd Breakdown</p>
+        <div className="flex bg-zinc-100 rounded-full p-0.5">
+          {(['type', 'breed'] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => switchTab(t)}
+              className={`px-3 py-1 rounded-full text-[11px] transition-colors cursor-pointer ${
+                tab === t ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
+              }`}
+            >
+              {t === 'type' ? 'By Type' : 'By Breed'}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex items-center gap-4">
 
         {/* SVG donut */}
@@ -590,10 +678,20 @@ function DonutChart({ cows, bulls, heifers, steers }: {
                 stroke="#f4f4f5" strokeWidth={R - r} />
             ) : arcs.map(s =>
               s.span >= 2 * Math.PI - 0.001 ? (
-                <circle key={s.key} cx={cx} cy={cy} r={(R + r) / 2} fill="none"
-                  stroke={s.color} strokeWidth={R - r} />
+                <circle
+                  key={s.key} cx={cx} cy={cy} r={(R + r) / 2} fill="none"
+                  stroke={s.color} strokeWidth={R - r}
+                  className="cursor-pointer transition-opacity"
+                  style={{ opacity: !activeKey || activeKey === s.key ? 1 : 0.3 }}
+                  onClick={() => handleSegmentClick(s.key)}
+                />
               ) : (
-                <path key={s.key} d={arc(s.start, s.end)} fill={s.color} />
+                <path
+                  key={s.key} d={arc(s.start, s.end)} fill={s.color}
+                  className="cursor-pointer transition-opacity"
+                  style={{ opacity: !activeKey || activeKey === s.key ? 1 : 0.3 }}
+                  onClick={() => handleSegmentClick(s.key)}
+                />
               )
             )}
             <circle cx={cx} cy={cy} r={r - 1} fill="white" />
@@ -605,15 +703,21 @@ function DonutChart({ cows, bulls, heifers, steers }: {
         </div>
 
         {/* Legend */}
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 flex-1">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 flex-1 max-h-[140px] overflow-y-auto">
           {segments.map(s => {
             const pct = total > 0 ? Math.round((s.value / total) * 100) : 0
+            const dimmed = !!activeKey && activeKey !== s.key
             return (
-              <div key={s.key} className="flex items-start gap-2">
+              <div
+                key={s.key}
+                className="flex items-start gap-2 cursor-pointer transition-opacity"
+                style={{ opacity: dimmed ? 0.35 : 1 }}
+                onClick={() => handleSegmentClick(s.key)}
+              >
                 <span className="mt-[3px] w-2.5 h-2.5 rounded-full shrink-0"
                   style={{ backgroundColor: s.color }} />
                 <div>
-                  <p className="text-xs text-zinc-400 leading-none">{s.label}</p>
+                  <p className="text-xs text-zinc-400 leading-none truncate max-w-[64px]">{s.label}</p>
                   <p className="text-sm font-bold text-zinc-900 mt-0.5 leading-none">
                     {s.value}
                     <span className="text-xs font-normal text-zinc-400 ml-1">{pct}%</span>
