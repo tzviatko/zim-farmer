@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { Outfit, DM_Mono } from "next/font/google";
+import { Urbanist, DM_Mono } from "next/font/google";
 import "./globals.css";
 
-const outfit = Outfit({
+const urbanist = Urbanist({
   variable: "--font-syne",
   subsets: ["latin"],
 });
@@ -26,7 +26,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${outfit.variable} ${dmMono.variable} h-full antialiased`}
+      className={`${urbanist.variable} ${dmMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
