@@ -154,72 +154,51 @@ export default function VehiclesPage() {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  async function handleVehicleSubmit(e: React.FormEvent) {
+  function handleVehicleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setVehicleSubmitting(true)
-    setVehicleError(null)
-    try {
-      const payload = {
-        yearMakeModel: vehicleForm.yearMakeModel,
-        locationId: vehicleForm.locationId || null,
-        engine: vehicleForm.engine,
-        serviceIntervalKm: vehicleForm.serviceIntervalKm ? parseInt(vehicleForm.serviceIntervalKm) : null,
-        active: true,
-      }
-      if (editVehicleId) {
-        await updateDoc(doc(db, 'vehicles', editVehicleId), payload)
-      } else {
-        await addDoc(collection(db, 'vehicles'), { ...payload, createdAt: Timestamp.now().toDate().toISOString() })
-      }
-      setShowVehicleForm(false)
-      fetchAll(true)
-    } catch (err) {
-      setVehicleError(err instanceof Error ? err.message : 'Error')
+    const payload = {
+      yearMakeModel: vehicleForm.yearMakeModel,
+      locationId: vehicleForm.locationId || null,
+      engine: vehicleForm.engine,
+      serviceIntervalKm: vehicleForm.serviceIntervalKm ? parseInt(vehicleForm.serviceIntervalKm) : null,
+      active: true,
     }
-    setVehicleSubmitting(false)
+    if (editVehicleId) {
+      updateDoc(doc(db, 'vehicles', editVehicleId), payload).catch(console.error)
+    } else {
+      addDoc(collection(db, 'vehicles'), { ...payload, createdAt: Timestamp.now().toDate().toISOString() }).catch(console.error)
+    }
+    setShowVehicleForm(false)
+    fetchAll(true)
   }
 
-  async function handleMileageSubmit(e: React.FormEvent) {
+  function handleMileageSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setMileageSubmitting(true)
-    setMileageError(null)
     const km = parseInt(mileageForm.recordedMileage)
-    if (isNaN(km)) { setMileageError('Enter a valid mileage'); setMileageSubmitting(false); return }
-    try {
-      await addDoc(collection(db, 'mileage_logs'), {
-        vehicleId: mileageForm.vehicleId,
-        date: mileageForm.date,
-        recordedMileage: km,
-        notes: mileageForm.notes || null,
-        createdAt: Timestamp.now().toDate().toISOString(),
-      })
-      setShowMileageForm(false)
-      fetchAll(true)
-    } catch (err) {
-      setMileageError(err instanceof Error ? err.message : 'Error')
-    }
-    setMileageSubmitting(false)
+    if (isNaN(km)) return
+    addDoc(collection(db, 'mileage_logs'), {
+      vehicleId: mileageForm.vehicleId,
+      date: mileageForm.date,
+      recordedMileage: km,
+      notes: mileageForm.notes || null,
+      createdAt: Timestamp.now().toDate().toISOString(),
+    }).catch(console.error)
+    setShowMileageForm(false)
+    fetchAll(true)
   }
 
-  async function handleMaintenanceSubmit(e: React.FormEvent) {
+  function handleMaintenanceSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setMaintenanceSubmitting(true)
-    setMaintenanceError(null)
-    try {
-      await addDoc(collection(db, 'maintenance_records'), {
-        vehicleId: maintenanceForm.vehicleId,
-        serviceDate: maintenanceForm.serviceDate,
-        serviceType: maintenanceForm.serviceType,
-        recordedMileage: maintenanceForm.recordedMileage ? parseInt(maintenanceForm.recordedMileage) : null,
-        notes: maintenanceForm.notes || null,
-        createdAt: Timestamp.now().toDate().toISOString(),
-      })
-      setShowMaintenanceForm(false)
-      fetchAll(true)
-    } catch (err) {
-      setMaintenanceError(err instanceof Error ? err.message : 'Error')
-    }
-    setMaintenanceSubmitting(false)
+    addDoc(collection(db, 'maintenance_records'), {
+      vehicleId: maintenanceForm.vehicleId,
+      serviceDate: maintenanceForm.serviceDate,
+      serviceType: maintenanceForm.serviceType,
+      recordedMileage: maintenanceForm.recordedMileage ? parseInt(maintenanceForm.recordedMileage) : null,
+      notes: maintenanceForm.notes || null,
+      createdAt: Timestamp.now().toDate().toISOString(),
+    }).catch(console.error)
+    setShowMaintenanceForm(false)
+    fetchAll(true)
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────

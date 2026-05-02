@@ -219,26 +219,21 @@ function AddEntryModal({ open, type, categories, onClose, onSaved }: {
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
   const [amount, setAmount] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  async function save() {
+  function save() {
     if (!description.trim() || !amount) return
-    setSaving(true)
-    try {
-      const coll = type === 'revenue' ? 'revenue_entries' : 'expense_entries'
-      await addDoc(collection(db, coll), {
-        description: description.trim(),
-        category: category || null,
-        amount: Number(amount),
-        date,
-        createdAt: Timestamp.now().toDate().toISOString(),
-      })
-      setDescription('')
-      setCategory('')
-      setAmount('')
-      setDate(today)
-      onSaved()
-    } finally { setSaving(false) }
+    const coll = type === 'revenue' ? 'revenue_entries' : 'expense_entries'
+    addDoc(collection(db, coll), {
+      description: description.trim(),
+      category: category || null,
+      amount: Number(amount),
+      date,
+      createdAt: Timestamp.now().toDate().toISOString(),
+    }).catch(console.error)
+    setDescription('')
+    setCategory('')
+    setAmount('')
+    setDate(today)
+    onSaved()
   }
 
   return (
@@ -267,9 +262,9 @@ function AddEntryModal({ open, type, categories, onClose, onSaved }: {
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)}
             className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm bg-white" />
         </div>
-        <button onClick={save} disabled={saving || !description.trim() || !amount}
+        <button onClick={save} disabled={!description.trim() || !amount}
           className={`w-full text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50 ${type === 'revenue' ? 'bg-green-700' : 'bg-red-700'}`}>
-          {saving ? 'Saving…' : `Add ${type === 'revenue' ? 'Revenue' : 'Expense'}`}
+          {`Add ${type === 'revenue' ? 'Revenue' : 'Expense'}`}
         </button>
       </div>
     </Modal>

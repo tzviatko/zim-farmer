@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Body -->
+  <rect x="18" y="22" width="28" height="18" rx="3" fill="#3B6D11"/>
+  <!-- Cab -->
+  <rect x="30" y="14" width="16" height="14" rx="2" fill="#3B6D11"/>
+  <!-- Cab window -->
+  <rect x="33" y="17" width="10" height="8" rx="1" fill="#a8d5a2" opacity="0.7"/>
+  <!-- Hood / engine block -->
+  <rect x="10" y="26" width="12" height="10" rx="2" fill="#2d5409"/>
+  <!-- Exhaust pipe -->
+  <rect x="13" y="18" width="3" height="10" rx="1" fill="#2d5409"/>
+  <!-- Exhaust cap -->
+  <ellipse cx="14.5" cy="18" rx="3" ry="1.5" fill="#1e3a07"/>
+
+  <!-- Big rear wheel -->
+  <circle cx="42" cy="42" r="11" fill="#1e3a07"/>
+  <circle cx="42" cy="42" r="8" fill="#2d5409"/>
+  <circle cx="42" cy="42" r="3" fill="#3B6D11"/>
+  <!-- Rear wheel tread marks -->
+  <line x1="42" y1="31" x2="42" y2="34" stroke="#1e3a07" stroke-width="2" stroke-linecap="round"/>
+  <line x1="42" y1="50" x2="42" y2="53" stroke="#1e3a07" stroke-width="2" stroke-linecap="round"/>
+  <line x1="31" y1="42" x2="34" y2="42" stroke="#1e3a07" stroke-width="2" stroke-linecap="round"/>
+  <line x1="50" y1="42" x2="53" y2="42" stroke="#1e3a07" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Small front wheel -->
+  <circle cx="18" cy="42" r="7" fill="#1e3a07"/>
+  <circle cx="18" cy="42" r="5" fill="#2d5409"/>
+  <circle cx="18" cy="42" r="2" fill="#3B6D11"/>
+
+  <!-- Ground line -->
+  <line x1="6" y1="52" x2="58" y2="52" stroke="#3B6D11" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+</svg>

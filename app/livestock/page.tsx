@@ -281,10 +281,8 @@ export default function LivestockPage() {
     setShowForm(true)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setSubmitting(true)
-    setFormError(null)
     const payload = {
       tag: form.tag,
       gender: form.gender,
@@ -299,73 +297,62 @@ export default function LivestockPage() {
       notes: form.notes || null,
       active: true,
     }
-    try {
-      if (editId) {
-        await updateDoc(doc(db, 'cattle', editId), payload)
-      } else {
-        await addDoc(collection(db, 'cattle'), { ...payload, created_at: Timestamp.now() })
-      }
-      setShowForm(false)
-      fetchAll(true)
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'An error occurred')
+    if (editId) {
+      updateDoc(doc(db, 'cattle', editId), payload).catch(console.error)
+    } else {
+      addDoc(collection(db, 'cattle'), { ...payload, created_at: Timestamp.now() }).catch(console.error)
     }
-    setSubmitting(false)
+    setShowForm(false)
+    fetchAll(true)
   }
 
-  async function handleRemove() {
+  function handleRemove() {
     if (!editId) return
-    setSubmitting(true)
-    try {
-      await updateDoc(doc(db, 'cattle', editId), { active: false })
-      setShowForm(false)
-      fetchAll(true)
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'An error occurred')
-    }
-    setSubmitting(false)
+    updateDoc(doc(db, 'cattle', editId), { active: false }).catch(console.error)
+    setShowForm(false)
+    fetchAll(true)
   }
 
   // ── Health record handlers ─────────────────────────────────────────────────
 
-  async function recordDip() {
+  function recordDip() {
     if (!detailAnimal) return
-    await addDoc(collection(db, 'dip_records'), {
+    addDoc(collection(db, 'dip_records'), {
       animalId: detailAnimal.id,
       date: dipDate,
       sessionId: null,
       createdAt: Timestamp.now().toDate().toISOString(),
-    })
+    }).catch(console.error)
     setShowDipForm(false)
     openDetail({ ...detailAnimal, lastDipDate: dipDate, dipStatus: getDipStatus(dipDate) })
     fetchAll(true)
   }
 
-  async function recordVaccination() {
+  function recordVaccination() {
     if (!detailAnimal || !vaccType) return
-    await addDoc(collection(db, 'vaccination_records'), {
+    addDoc(collection(db, 'vaccination_records'), {
       animalId: detailAnimal.id,
       date: vaccDate,
       type: vaccType,
       vaccineUsed: vaccineUsed || null,
       createdAt: Timestamp.now().toDate().toISOString(),
-    })
+    }).catch(console.error)
     setShowVaccForm(false)
     setVaccType('')
     setVaccineUsed('')
     openDetail(detailAnimal)
   }
 
-  async function recordWeight() {
+  function recordWeight() {
     if (!detailAnimal || !weightKg) return
     const kg = parseFloat(weightKg)
     if (isNaN(kg)) return
-    await addDoc(collection(db, 'weight_records'), {
+    addDoc(collection(db, 'weight_records'), {
       animalId: detailAnimal.id,
       date: weightDate,
       weightKg: kg,
       createdAt: Timestamp.now().toDate().toISOString(),
-    })
+    }).catch(console.error)
     setShowWeightForm(false)
     setWeightKg('')
     openDetail(detailAnimal)
@@ -374,18 +361,18 @@ export default function LivestockPage() {
 
   // ── Batch dip ──────────────────────────────────────────────────────────────
 
-  async function submitBatchDip() {
+  function submitBatchDip() {
     if (!batchDipTags.size) return
     const sessionId = `session_${Date.now()}`
     const targets = animals.filter(a => batchDipTags.has(a.id))
-    await Promise.all(targets.map(a =>
+    targets.forEach(a =>
       addDoc(collection(db, 'dip_records'), {
         animalId: a.id,
         date: batchDipDate,
         sessionId,
         createdAt: Timestamp.now().toDate().toISOString(),
-      })
-    ))
+      }).catch(console.error)
+    )
     setShowBatchDip(false)
     setBatchDipTags(new Set())
     fetchAll(true)

@@ -141,10 +141,8 @@ export default function InventoryPage() {
     setShowItemForm(true)
   }
 
-  async function handleItemSubmit(e: React.FormEvent) {
+  function handleItemSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setItemSubmitting(true)
-    setItemError(null)
     const payload = {
       name: itemForm.name,
       metric: itemForm.metric,
@@ -152,32 +150,21 @@ export default function InventoryPage() {
       parLevel: itemForm.parLevel ? parseFloat(itemForm.parLevel) : null,
       active: true,
     }
-    try {
-      if (editItemId) {
-        await updateDoc(doc(db, 'inventory_items', editItemId), payload)
-      } else {
-        await addDoc(collection(db, 'inventory_items'), { ...payload, createdAt: Timestamp.now().toDate().toISOString() })
-      }
-      setShowItemForm(false)
-      fetchAll(true)
-    } catch (err) {
-      setItemError(err instanceof Error ? err.message : 'Error')
+    if (editItemId) {
+      updateDoc(doc(db, 'inventory_items', editItemId), payload).catch(console.error)
+    } else {
+      addDoc(collection(db, 'inventory_items'), { ...payload, createdAt: Timestamp.now().toDate().toISOString() }).catch(console.error)
     }
-    setItemSubmitting(false)
+    setShowItemForm(false)
+    fetchAll(true)
   }
 
-  async function handleRemoveItem() {
+  function handleRemoveItem() {
     if (!editItemId) return
-    setItemSubmitting(true)
-    try {
-      await updateDoc(doc(db, 'inventory_items', editItemId), { active: false })
-      setShowItemForm(false)
-      setSelectedItem(null)
-      fetchAll(true)
-    } catch (err) {
-      setItemError(err instanceof Error ? err.message : 'Error')
-    }
-    setItemSubmitting(false)
+    updateDoc(doc(db, 'inventory_items', editItemId), { active: false }).catch(console.error)
+    setShowItemForm(false)
+    setSelectedItem(null)
+    fetchAll(true)
   }
 
   // ── Transaction form ───────────────────────────────────────────────────────
@@ -189,27 +176,20 @@ export default function InventoryPage() {
     setShowTxForm(true)
   }
 
-  async function handleTxSubmit(e: React.FormEvent) {
+  function handleTxSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setTxSubmitting(true)
-    setTxError(null)
     const qty = parseFloat(txForm.quantity)
-    if (isNaN(qty) || qty <= 0) { setTxError('Enter a valid quantity'); setTxSubmitting(false); return }
-    try {
-      await addDoc(collection(db, 'inventory_transactions'), {
-        itemId: txForm.itemId,
-        date: txForm.date,
-        description: txForm.description || null,
-        quantityIn: txType === 'in' ? qty : null,
-        quantityOut: txType === 'out' ? qty : null,
-        createdAt: Timestamp.now().toDate().toISOString(),
-      })
-      setShowTxForm(false)
-      fetchAll(true)
-    } catch (err) {
-      setTxError(err instanceof Error ? err.message : 'Error')
-    }
-    setTxSubmitting(false)
+    if (isNaN(qty) || qty <= 0) return
+    addDoc(collection(db, 'inventory_transactions'), {
+      itemId: txForm.itemId,
+      date: txForm.date,
+      description: txForm.description || null,
+      quantityIn: txType === 'in' ? qty : null,
+      quantityOut: txType === 'out' ? qty : null,
+      createdAt: Timestamp.now().toDate().toISOString(),
+    }).catch(console.error)
+    setShowTxForm(false)
+    fetchAll(true)
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────

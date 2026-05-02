@@ -121,74 +121,54 @@ export default function EquipmentPage() {
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
-  async function handleEquipSubmit(e: React.FormEvent) {
+  function handleEquipSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setEquipSubmitting(true)
-    setEquipError(null)
-    try {
-      const payload = {
-        name: equipForm.name,
-        description: equipForm.description || null,
-        condition: equipForm.condition,
-        quantity: equipForm.quantity ? parseFloat(equipForm.quantity) : null,
-        locationId: equipForm.locationId || null,
-        status: equipForm.status,
-        type: equipForm.type,
-        active: true,
-      }
-      if (editEquipId) {
-        await updateDoc(doc(db, 'equipment', editEquipId), payload)
-      } else {
-        await addDoc(collection(db, 'equipment'), { ...payload, createdAt: Timestamp.now().toDate().toISOString() })
-      }
-      setShowEquipForm(false)
-      fetchAll(true)
-    } catch (err) {
-      setEquipError(err instanceof Error ? err.message : 'Error')
+    const payload = {
+      name: equipForm.name,
+      description: equipForm.description || null,
+      condition: equipForm.condition,
+      quantity: equipForm.quantity ? parseFloat(equipForm.quantity) : null,
+      locationId: equipForm.locationId || null,
+      status: equipForm.status,
+      type: equipForm.type,
+      active: true,
     }
-    setEquipSubmitting(false)
+    if (editEquipId) {
+      updateDoc(doc(db, 'equipment', editEquipId), payload).catch(console.error)
+    } else {
+      addDoc(collection(db, 'equipment'), { ...payload, createdAt: Timestamp.now().toDate().toISOString() }).catch(console.error)
+    }
+    setShowEquipForm(false)
+    fetchAll(true)
   }
 
-  async function handleCheckout(e: React.FormEvent) {
+  function handleCheckout(e: React.FormEvent) {
     e.preventDefault()
-    setCheckoutSubmitting(true)
-    setCheckoutError(null)
-    try {
-      await addDoc(collection(db, 'equipment_use_log'), {
-        equipmentId: checkoutForm.equipmentId,
-        date: checkoutForm.date,
-        reasonForUse: checkoutForm.reason || null,
-        givenToId: checkoutForm.givenToId || null,
-        checkoutTime: checkoutForm.checkoutTime || null,
-        returnedById: null,
-        returnTime: null,
-        returnedCondition: null,
-        createdAt: Timestamp.now().toDate().toISOString(),
-      })
-      setShowCheckoutForm(false)
-      fetchAll(true)
-    } catch (err) {
-      setCheckoutError(err instanceof Error ? err.message : 'Error')
-    }
-    setCheckoutSubmitting(false)
+    addDoc(collection(db, 'equipment_use_log'), {
+      equipmentId: checkoutForm.equipmentId,
+      date: checkoutForm.date,
+      reasonForUse: checkoutForm.reason || null,
+      givenToId: checkoutForm.givenToId || null,
+      checkoutTime: checkoutForm.checkoutTime || null,
+      returnedById: null,
+      returnTime: null,
+      returnedCondition: null,
+      createdAt: Timestamp.now().toDate().toISOString(),
+    }).catch(console.error)
+    setShowCheckoutForm(false)
+    fetchAll(true)
   }
 
-  async function handleReturn() {
+  function handleReturn() {
     if (!selectedLog) return
-    setReturnSubmitting(true)
-    try {
-      await updateDoc(doc(db, 'equipment_use_log', selectedLog.id), {
-        returnedById: returnForm.returnedById || null,
-        returnTime: returnForm.returnTime || null,
-        returnedCondition: returnForm.returnedCondition,
-      })
-      setShowReturnForm(false)
-      setSelectedLog(null)
-      fetchAll(true)
-    } catch (err) {
-      console.error(err)
-    }
-    setReturnSubmitting(false)
+    updateDoc(doc(db, 'equipment_use_log', selectedLog.id), {
+      returnedById: returnForm.returnedById || null,
+      returnTime: returnForm.returnTime || null,
+      returnedCondition: returnForm.returnedCondition,
+    }).catch(console.error)
+    setShowReturnForm(false)
+    setSelectedLog(null)
+    fetchAll(true)
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────

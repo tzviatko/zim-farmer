@@ -15,8 +15,6 @@ export default function LocationsPage() {
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
   const [name, setName] = useState('')
-  const [saving, setSaving] = useState(false)
-
   async function load() {
     const snap = await getDocs(collection(db, 'paddocks'))
     setLocations(snap.docs.map(d => ({ id: d.id, name: d.data().name as string }))
@@ -26,18 +24,15 @@ export default function LocationsPage() {
 
   useEffect(() => { load() }, [])
 
-  async function save() {
+  function save() {
     if (!name.trim()) return
-    setSaving(true)
-    try {
-      await addDoc(collection(db, 'paddocks'), {
-        name: name.trim(),
-        createdAt: Timestamp.now().toDate().toISOString(),
-      })
-      setName('')
-      setAddOpen(false)
-      load()
-    } finally { setSaving(false) }
+    addDoc(collection(db, 'paddocks'), {
+      name: name.trim(),
+      createdAt: Timestamp.now().toDate().toISOString(),
+    }).catch(console.error)
+    setName('')
+    setAddOpen(false)
+    load()
   }
 
   return (
@@ -78,9 +73,9 @@ export default function LocationsPage() {
               className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm bg-white"
               placeholder="e.g. North Camp" />
           </div>
-          <button onClick={save} disabled={saving || !name.trim()}
+          <button onClick={save} disabled={!name.trim()}
             className="w-full bg-[#3B6D11] text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50">
-            {saving ? 'Saving…' : 'Add Location'}
+            Add Location
           </button>
         </div>
       </Modal>

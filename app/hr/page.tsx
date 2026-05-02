@@ -468,40 +468,35 @@ function AddStaffModal({ open, onClose, onSaved }: {
     emergencyContactName: '', emergencyContactRelation: '', emergencyContactPhone: '',
   }
   const [form, setForm] = useState(empty)
-  const [saving, setSaving] = useState(false)
-
   function set(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
 
-  async function save() {
+  function save() {
     if (!form.fullName.trim()) return
-    setSaving(true)
-    try {
-      await addDoc(collection(db, 'staff'), {
-        fullName: form.fullName.trim(),
-        idNumber: form.idNumber.trim() || null,
-        role: form.role || null,
-        dateStarted: form.dateStarted || null,
-        salary: form.salary ? Number(form.salary) : null,
-        dob: form.dob || null,
-        address: form.address.trim() || null,
-        phone: form.phone.trim() || null,
-        emergencyContactName: form.emergencyContactName.trim() || null,
-        emergencyContactRelation: form.emergencyContactRelation.trim() || null,
-        emergencyContactPhone: form.emergencyContactPhone.trim() || null,
-        active: true,
-        createdAt: Timestamp.now().toDate().toISOString(),
-      })
-      setForm(empty)
-      onSaved()
-    } finally { setSaving(false) }
+    addDoc(collection(db, 'staff'), {
+      fullName: form.fullName.trim(),
+      idNumber: form.idNumber.trim() || null,
+      role: form.role || null,
+      dateStarted: form.dateStarted || null,
+      salary: form.salary ? Number(form.salary) : null,
+      dob: form.dob || null,
+      address: form.address.trim() || null,
+      phone: form.phone.trim() || null,
+      emergencyContactName: form.emergencyContactName.trim() || null,
+      emergencyContactRelation: form.emergencyContactRelation.trim() || null,
+      emergencyContactPhone: form.emergencyContactPhone.trim() || null,
+      active: true,
+      createdAt: Timestamp.now().toDate().toISOString(),
+    }).catch(console.error)
+    setForm(empty)
+    onSaved()
   }
 
   return (
     <Modal open={open} onClose={onClose} title="Add Staff Member">
       <StaffForm form={form} set={set} />
-      <button onClick={save} disabled={saving || !form.fullName.trim()}
+      <button onClick={save} disabled={!form.fullName.trim()}
         className="mt-4 w-full bg-[#3B6D11] text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50">
-        {saving ? 'Saving…' : 'Add Staff Member'}
+        Add Staff Member
       </button>
     </Modal>
   )
@@ -523,8 +518,6 @@ function EditStaffModal({ open, staff, onClose, onSaved }: {
     emergencyContactRelation: staff.emergencyContactRelation ?? '',
     emergencyContactPhone: staff.emergencyContactPhone ?? '',
   })
-  const [saving, setSaving] = useState(false)
-
   useEffect(() => {
     setForm({
       fullName: staff.fullName,
@@ -543,25 +536,22 @@ function EditStaffModal({ open, staff, onClose, onSaved }: {
 
   function set(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
 
-  async function save() {
+  function save() {
     if (!form.fullName.trim()) return
-    setSaving(true)
-    try {
-      await updateDoc(doc(db, 'staff', staff.id), {
-        fullName: form.fullName.trim(),
-        idNumber: form.idNumber.trim() || null,
-        role: form.role || null,
-        dateStarted: form.dateStarted || null,
-        salary: form.salary ? Number(form.salary) : null,
-        dob: form.dob || null,
-        address: form.address.trim() || null,
-        phone: form.phone.trim() || null,
-        emergencyContactName: form.emergencyContactName.trim() || null,
-        emergencyContactRelation: form.emergencyContactRelation.trim() || null,
-        emergencyContactPhone: form.emergencyContactPhone.trim() || null,
-      })
-      onSaved()
-    } finally { setSaving(false) }
+    updateDoc(doc(db, 'staff', staff.id), {
+      fullName: form.fullName.trim(),
+      idNumber: form.idNumber.trim() || null,
+      role: form.role || null,
+      dateStarted: form.dateStarted || null,
+      salary: form.salary ? Number(form.salary) : null,
+      dob: form.dob || null,
+      address: form.address.trim() || null,
+      phone: form.phone.trim() || null,
+      emergencyContactName: form.emergencyContactName.trim() || null,
+      emergencyContactRelation: form.emergencyContactRelation.trim() || null,
+      emergencyContactPhone: form.emergencyContactPhone.trim() || null,
+    }).catch(console.error)
+    onSaved()
   }
 
   return (
@@ -569,9 +559,9 @@ function EditStaffModal({ open, staff, onClose, onSaved }: {
       <StaffForm form={form} set={set} />
       <div className="mt-4 flex gap-2">
         <button onClick={onClose} className="flex-1 border border-zinc-200 text-zinc-700 rounded-xl py-3 text-sm font-medium">Cancel</button>
-        <button onClick={save} disabled={saving || !form.fullName.trim()}
+        <button onClick={save} disabled={!form.fullName.trim()}
           className="flex-1 bg-[#3B6D11] text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50">
-          {saving ? 'Saving…' : 'Save'}
+          Save
         </button>
       </div>
     </Modal>
@@ -613,8 +603,6 @@ function SalaryModal({ open, staff, onClose, onSaved }: {
   const [subtractLoan, setSubtractLoan] = useState(staff.loanBalance > 0)
   const [groceryBasket, setGroceryBasket] = useState(false)
   const [notes, setNotes] = useState('')
-  const [saving, setSaving] = useState(false)
-
   useEffect(() => {
     setAmountDue(String(staff.salary ?? ''))
     setSubtractLoan(staff.loanBalance > 0)
@@ -624,33 +612,29 @@ function SalaryModal({ open, staff, onClose, onSaved }: {
   const deduction = subtractLoan ? staff.monthlyRepayment : 0
   const netAmount = due - deduction
 
-  async function save() {
+  function save() {
     if (!amountDue) return
-    setSaving(true)
-    try {
-      await addDoc(collection(db, 'salary_payments'), {
+    addDoc(collection(db, 'salary_payments'), {
+      staffId: staff.id,
+      date,
+      amountDue: due,
+      subtractLoanRepayment: subtractLoan,
+      groceryBasketGiven: groceryBasket,
+      notes: notes.trim() || null,
+      createdAt: Timestamp.now().toDate().toISOString(),
+    }).catch(console.error)
+    if (subtractLoan && deduction > 0) {
+      addDoc(collection(db, 'loan_records'), {
         staffId: staff.id,
         date,
-        amountDue: due,
-        subtractLoanRepayment: subtractLoan,
-        groceryBasketGiven: groceryBasket,
-        notes: notes.trim() || null,
+        loanAmountGiven: null,
+        loanRepaymentAmount: deduction,
+        repaymentPeriodMonths: null,
+        notes: 'Auto-deducted from salary',
         createdAt: Timestamp.now().toDate().toISOString(),
-      })
-      // Auto-record loan repayment if deducting
-      if (subtractLoan && deduction > 0) {
-        await addDoc(collection(db, 'loan_records'), {
-          staffId: staff.id,
-          date,
-          loanAmountGiven: null,
-          loanRepaymentAmount: deduction,
-          repaymentPeriodMonths: null,
-          notes: 'Auto-deducted from salary',
-          createdAt: Timestamp.now().toDate().toISOString(),
-        })
-      }
-      onSaved()
-    } finally { setSaving(false) }
+      }).catch(console.error)
+    }
+    onSaved()
   }
 
   return (
@@ -682,9 +666,9 @@ function SalaryModal({ open, staff, onClose, onSaved }: {
         </div>
 
         <Field label="Notes (optional)" value={notes} onChange={setNotes} />
-        <button onClick={save} disabled={saving || !amountDue}
+        <button onClick={save} disabled={!amountDue}
           className="w-full bg-[#3B6D11] text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50">
-          {saving ? 'Saving…' : 'Record Payment'}
+          Record Payment
         </button>
       </div>
     </Modal>
@@ -700,26 +684,21 @@ function LoanModal({ open, staff, onClose, onSaved }: {
   const [amount, setAmount] = useState('')
   const [repaymentMonths, setRepaymentMonths] = useState('')
   const [notes, setNotes] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  async function save() {
+  function save() {
     if (!amount) return
-    setSaving(true)
-    try {
-      await addDoc(collection(db, 'loan_records'), {
-        staffId: staff.id,
-        date,
-        loanAmountGiven: mode === 'give' ? Number(amount) : null,
-        loanRepaymentAmount: mode === 'repay' ? Number(amount) : null,
-        repaymentPeriodMonths: mode === 'give' && repaymentMonths ? Number(repaymentMonths) : null,
-        notes: notes.trim() || null,
-        createdAt: Timestamp.now().toDate().toISOString(),
-      })
-      setAmount('')
-      setRepaymentMonths('')
-      setNotes('')
-      onSaved()
-    } finally { setSaving(false) }
+    addDoc(collection(db, 'loan_records'), {
+      staffId: staff.id,
+      date,
+      loanAmountGiven: mode === 'give' ? Number(amount) : null,
+      loanRepaymentAmount: mode === 'repay' ? Number(amount) : null,
+      repaymentPeriodMonths: mode === 'give' && repaymentMonths ? Number(repaymentMonths) : null,
+      notes: notes.trim() || null,
+      createdAt: Timestamp.now().toDate().toISOString(),
+    }).catch(console.error)
+    setAmount('')
+    setRepaymentMonths('')
+    setNotes('')
+    onSaved()
   }
 
   return (
@@ -745,9 +724,9 @@ function LoanModal({ open, staff, onClose, onSaved }: {
           </div>
         )}
         <Field label="Notes (optional)" value={notes} onChange={setNotes} />
-        <button onClick={save} disabled={saving || !amount}
+        <button onClick={save} disabled={!amount}
           className="w-full bg-[#3B6D11] text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50">
-          {saving ? 'Saving…' : mode === 'give' ? 'Record Loan' : 'Record Repayment'}
+          {mode === 'give' ? 'Record Loan' : 'Record Repayment'}
         </button>
       </div>
     </Modal>
@@ -760,8 +739,6 @@ function SafetyModal({ open, staff, onClose, onSaved }: {
   const today = new Date().toISOString().slice(0, 10)
   const [date, setDate] = useState(today)
   const [selected, setSelected] = useState<Set<SafetyEquipmentItem>>(new Set())
-  const [saving, setSaving] = useState(false)
-
   function toggle(item: SafetyEquipmentItem) {
     setSelected(prev => {
       const next = new Set(prev)
@@ -770,19 +747,16 @@ function SafetyModal({ open, staff, onClose, onSaved }: {
     })
   }
 
-  async function save() {
+  function save() {
     if (selected.size === 0) return
-    setSaving(true)
-    try {
-      await addDoc(collection(db, 'safety_equipment_given'), {
-        staffId: staff.id,
-        date,
-        items: Array.from(selected),
-        createdAt: Timestamp.now().toDate().toISOString(),
-      })
-      setSelected(new Set())
-      onSaved()
-    } finally { setSaving(false) }
+    addDoc(collection(db, 'safety_equipment_given'), {
+      staffId: staff.id,
+      date,
+      items: Array.from(selected),
+      createdAt: Timestamp.now().toDate().toISOString(),
+    }).catch(console.error)
+    setSelected(new Set())
+    onSaved()
   }
 
   return (
@@ -797,9 +771,9 @@ function SafetyModal({ open, staff, onClose, onSaved }: {
             </label>
           ))}
         </div>
-        <button onClick={save} disabled={saving || selected.size === 0}
+        <button onClick={save} disabled={selected.size === 0}
           className="w-full bg-[#3B6D11] text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50">
-          {saving ? 'Saving…' : `Issue ${selected.size > 0 ? selected.size : ''} Item${selected.size !== 1 ? 's' : ''}`}
+          {`Issue ${selected.size > 0 ? selected.size : ''} Item${selected.size !== 1 ? 's' : ''}`}
         </button>
       </div>
     </Modal>
