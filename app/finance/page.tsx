@@ -80,7 +80,7 @@ export default function FinancePage() {
         {/* Month selector */}
         <div className="flex items-center gap-2">
           <input type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)}
-            className="flex-1 border border-zinc-200 rounded-xl px-3 py-2 text-sm bg-white" />
+            className="flex-1 border border-zinc-300 rounded-xl px-3 py-2 text-sm text-zinc-900 bg-white" />
         </div>
 
         {/* P&L cards */}
