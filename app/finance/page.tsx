@@ -33,10 +33,12 @@ export default function FinancePage() {
   const [tab, setTab] = useState<Tab>('summary')
   const [addOpen, setAddOpen] = useState<'revenue' | 'expense' | null>(null)
   const [monthFilter, setMonthFilter] = useState<string>(() => new Date().toISOString().slice(0, 7))
-  const [filterYear, filterMonth] = monthFilter.split('-').map(Number)
-  function setYearMonth(year: number, month: number) {
-    setMonthFilter(`${year}-${String(month).padStart(2, '0')}`)
+  function shiftMonth(delta: number) {
+    const [y, m] = monthFilter.split('-').map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setMonthFilter(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
+  const monthLabel = new Date(monthFilter + '-02').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   async function load() {
     const [revSnap, expSnap] = await Promise.all([
@@ -82,19 +84,16 @@ export default function FinancePage() {
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
 
         {/* Month selector */}
-        <div className="flex gap-2">
-          <select value={filterMonth} onChange={e => setYearMonth(filterYear, Number(e.target.value))}
-            className="flex-1 border border-zinc-300 rounded-xl px-3 py-2 text-sm font-medium text-zinc-900 bg-white appearance-none">
-            {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
-              <option key={m} value={i + 1}>{m}</option>
-            ))}
-          </select>
-          <select value={filterYear} onChange={e => setYearMonth(Number(e.target.value), filterMonth)}
-            className="w-28 border border-zinc-300 rounded-xl px-3 py-2 text-sm font-medium text-zinc-900 bg-white appearance-none">
-            {[2024, 2025, 2026, 2027].map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+        <div className="flex items-center justify-between bg-white border border-zinc-200 rounded-xl px-2 py-2">
+          <button onClick={() => shiftMonth(-1)}
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 active:bg-zinc-100">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span className="text-sm font-semibold text-zinc-900">{monthLabel}</span>
+          <button onClick={() => shiftMonth(1)}
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 active:bg-zinc-100">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
         </div>
 
         {/* P&L cards */}
