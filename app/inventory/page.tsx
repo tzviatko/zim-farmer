@@ -200,7 +200,10 @@ export default function InventoryPage() {
     <div className="min-h-screen bg-[#F5F5F0] font-[family-name:var(--font-syne)] pb-[100px]">
       <header className="sticky top-0 z-40 bg-white border-b border-zinc-100 px-4 py-3.5">
         <div className="max-w-lg mx-auto flex items-center justify-between">
-          <h1 className="text-xl font-bold tracking-tight text-zinc-900">Inventory</h1>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900">Inventory</h1>
+            <p className="text-xs text-zinc-500 mt-0.5">Stock levels · In/Out log</p>
+          </div>
           <div className="flex gap-2">
             <button onClick={() => openTx('in')}
               className="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-full font-medium cursor-pointer hover:bg-green-100 transition-colors">+ In</button>
@@ -311,7 +314,7 @@ export default function InventoryPage() {
                         <span className={`text-xs font-medium ${t.quantityIn ? 'text-green-600' : 'text-red-600'}`}>
                           {t.quantityIn ? `+${t.quantityIn}` : `-${t.quantityOut}`} {selectedItem.metric}
                         </span>
-                        {t.description && <span className="text-xs text-zinc-400">{t.description}</span>}
+                        {t.description && <span className="text-xs text-zinc-500">{t.description}</span>}
                       </div>
                       <p className="text-[11px] text-zinc-400">{t.date}</p>
                     </div>

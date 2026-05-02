@@ -79,8 +79,8 @@ export async function seedTestData() {
   }
 
   // ── Inventory ────────────────────────────────────────────────────────────────
-  if (await isEmpty('inventory_items')) {
-    const invItems = [
+  {
+    const invItemsData = [
       { name: 'Cattle salt lick', metric: 'kg',    parLevel: 50  },
       { name: 'Diesel',           metric: 'L',     parLevel: 200 },
       { name: 'Game feed mix',    metric: 'kg',    parLevel: 100 },
@@ -88,14 +88,18 @@ export async function seedTestData() {
       { name: 'Ear tags',         metric: 'units', parLevel: 20  },
       { name: 'Baling twine',     metric: 'units', parLevel: 5   },
     ] as const
-    for (const item of invItems) {
+    const existingSnap = await getDocs(collection(db, 'inventory_items'))
+    const existingNames = new Set(existingSnap.docs.map(d => d.data().name as string))
+    let invAdded = 0
+    for (const item of invItemsData) {
+      if (existingNames.has(item.name)) continue
       const ref = await addDoc(collection(db, 'inventory_items'), { ...item, locationId: home.id, active: true, createdAt: now() })
       await addDoc(collection(db, 'inventory_transactions'), { itemId: ref.id, date: daysAgo(30), description: 'Opening stock', quantityIn: item.parLevel * 2, quantityOut: null, createdAt: now() })
       await addDoc(collection(db, 'inventory_transactions'), { itemId: ref.id, date: daysAgo(10), description: 'Weekly usage', quantityIn: null, quantityOut: Math.round(item.parLevel * 1.2), createdAt: now() })
+      invAdded++
     }
-    console.log('Seeded: inventory')
-  } else {
-    console.log('Inventory: skipping (already exists)')
+    if (invAdded > 0) console.log(`Seeded: inventory (added ${invAdded} items)`)
+    else console.log('Inventory: all items already exist')
   }
 
   // ── Equipment ────────────────────────────────────────────────────────────────

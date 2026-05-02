@@ -7,9 +7,10 @@ interface Props {
   onClose: () => void
   title: string
   children: React.ReactNode
+  minContentHeight?: string
 }
 
-export default function Modal({ open, onClose, title, children }: Props) {
+export default function Modal({ open, onClose, title, children, minContentHeight }: Props) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -21,10 +22,10 @@ export default function Modal({ open, onClose, title, children }: Props) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 pb-[90px] sm:p-4 sm:pb-4"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto flex flex-col">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[88vh] sm:max-h-[92vh] overflow-y-auto flex flex-col">
         <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between sticky top-0 bg-white z-10">
           <h2 className="font-semibold text-sm text-zinc-900">{title}</h2>
           <button
@@ -34,7 +35,7 @@ export default function Modal({ open, onClose, title, children }: Props) {
             ×
           </button>
         </div>
-        <div className="px-5 py-4 flex-1">{children}</div>
+        <div className="px-5 py-4 flex-1" style={minContentHeight ? { minHeight: minContentHeight } : undefined}>{children}</div>
       </div>
     </div>
   )

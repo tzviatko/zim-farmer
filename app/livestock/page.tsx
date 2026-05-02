@@ -40,7 +40,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'young',   label: 'Young' },
 ]
 
-const STATUS_OPTS: AnimalStatus[] = ['active', 'sold', 'lost', 'in_calf', 'deceased']
+const STATUS_OPTS: AnimalStatus[] = ['active', 'sold', 'lost', 'deceased']
 const OWNER_OPTS: AnimalOwner[] = ['Amaval', 'Tsinda - Cornelia', 'Tsinda - Other']
 const GROUP_OPTS: AnimalGroup[] = ['A', 'B']
 
@@ -108,9 +108,14 @@ export default function LivestockPage() {
   // Add/edit modal
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm())
+
+  // Birth form
+  const [showBirthForm, setShowBirthForm] = useState(false)
+  const [birthTag, setBirthTag] = useState('')
+  const [birthGender, setBirthGender] = useState<'M' | 'F'>('F')
+  const [birthDate, setBirthDate] = useState(today())
 
   // Detail / health modals
   const [detailAnimal, setDetailAnimal] = useState<EnrichedAnimal | null>(null)
@@ -263,12 +268,13 @@ export default function LivestockPage() {
   }
 
   function openEdit(a: EnrichedAnimal) {
+    const isInCalfFemale = a.gender === 'F' && a.status === 'in_calf'
     setForm({
       tag: fmt(a.tag),
       gender: a.gender,
       isBull: a.isBull,
       dob: a.dob ?? '',
-      status: a.status,
+      status: isInCalfFemale ? 'active' : a.status,
       group: a.group ?? '',
       motherId: a.motherId ?? '',
       owner: a.owner ?? '',
@@ -283,12 +289,13 @@ export default function LivestockPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const inCalf = form.gender === 'F' && form.status === 'in_calf'
     const payload = {
       tag: form.tag,
       gender: form.gender,
       isBull: form.gender === 'M' && form.isBull,
       dob: form.dob || null,
-      status: form.status,
+      status: inCalf ? 'in_calf' : form.status,
       group: form.group || null,
       motherId: form.motherId || null,
       owner: form.owner || null,
@@ -386,7 +393,10 @@ export default function LivestockPage() {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white border-b border-zinc-100 px-4 py-3.5">
         <div className="max-w-lg mx-auto flex items-center justify-between">
-          <h1 className="text-xl font-bold tracking-tight text-zinc-900">Livestock</h1>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900">Livestock</h1>
+            <p className="text-xs text-zinc-500 mt-0.5">Animals · Health · Records</p>
+          </div>
           <div className="flex gap-2">
             <button onClick={() => setShowBatchDip(true)}
               className="text-xs bg-[#3B6D11]/10 text-[#3B6D11] px-3 py-1.5 rounded-full font-medium hover:bg-[#3B6D11]/20 transition-colors cursor-pointer">
@@ -469,7 +479,7 @@ export default function LivestockPage() {
                     {a.status.replace('_', ' ')}
                   </span>
                 </div>
-                <p className="text-xs text-zinc-400 mt-0.5 truncate">
+                <p className="text-xs text-zinc-500 mt-0.5 truncate">
                   {[a.breed, a.group ? `Group ${a.group}` : null, a.ageYears ? `${a.ageYears.toFixed(1)}y` : null, a.lastWeightKg ? `${a.lastWeightKg}kg` : null].filter(Boolean).join(' · ')}
                 </p>
               </div>
@@ -519,9 +529,18 @@ export default function LivestockPage() {
             </label>
           )}
 
+          {form.gender === 'F' && (
+            <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
+              <input type="checkbox" checked={form.status === 'in_calf'}
+                onChange={e => setForm({ ...form, status: e.target.checked ? 'in_calf' : 'active' })}
+                className="rounded" />
+              In calf
+            </label>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="Status">
-              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as AnimalStatus })} className={sel}>
+              <select value={form.status === 'in_calf' ? 'active' : form.status} onChange={e => setForm({ ...form, status: e.target.value as AnimalStatus })} className={sel}>
                 {STATUS_OPTS.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
               </select>
             </Field>
@@ -564,12 +583,12 @@ export default function LivestockPage() {
 
           {formError && <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{formError}</p>}
 
-          <button type="submit" disabled={submitting}
-            className="w-full bg-[#3B6D11] text-white text-sm font-medium py-3 rounded-full hover:bg-[#2d5409] transition-colors disabled:opacity-50 cursor-pointer">
-            {submitting ? 'Saving…' : editId ? 'Save Changes' : 'Add Animal'}
+          <button type="submit"
+            className="w-full bg-[#3B6D11] text-white text-sm font-medium py-3 rounded-full hover:bg-[#2d5409] transition-colors cursor-pointer">
+            {editId ? 'Save Changes' : 'Add Animal'}
           </button>
           {editId && (
-            <button type="button" onClick={handleRemove} disabled={submitting}
+            <button type="button" onClick={handleRemove}
               className="w-full text-red-500 text-sm py-2 rounded-full hover:bg-red-50 transition-colors cursor-pointer">
               Remove from registry
             </button>
@@ -578,7 +597,7 @@ export default function LivestockPage() {
       </Modal>
 
       {/* ── Animal detail modal ───────────────────────────────────────────── */}
-      <Modal open={!!detailAnimal} onClose={() => setDetailAnimal(null)} title={detailAnimal ? `Tag ${fmt(detailAnimal.tag)}` : ''}>
+      <Modal open={!!detailAnimal} onClose={() => { setDetailAnimal(null); setShowBirthForm(false) }} title={detailAnimal ? `Tag ${fmt(detailAnimal.tag)}` : ''} minContentHeight="380px">
         {detailAnimal && (
           <div className="space-y-4">
             {/* Tabs */}
@@ -595,7 +614,89 @@ export default function LivestockPage() {
               <div className="space-y-3">
                 <InfoRow label="Type" value={detailAnimal.type} />
                 <InfoRow label="Gender" value={detailAnimal.gender === 'M' ? 'Male' : 'Female'} />
-                <InfoRow label="Status" value={<span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_CLASS[detailAnimal.status]}`}>{detailAnimal.status.replace('_', ' ')}</span>} />
+                {/* Status pills */}
+                <div className="flex items-center justify-between py-2 border-b border-zinc-50">
+                  <span className="text-xs text-zinc-500">Status</span>
+                  <div className="flex flex-wrap gap-1.5 justify-end">
+                    {(detailAnimal.gender === 'M'
+                      ? ['active', 'sold', 'lost', 'deceased'] as AnimalStatus[]
+                      : ['active', 'in_calf', 'sold', 'lost', 'deceased'] as AnimalStatus[]
+                    ).map(s => (
+                      <button key={s}
+                        onClick={() => {
+                          updateDoc(doc(db, 'cattle', detailAnimal.id), { status: s }).catch(console.error)
+                          const updated = { ...detailAnimal, status: s }
+                          setDetailAnimal(updated)
+                          setAnimals(prev => prev.map(a => a.id === detailAnimal.id ? { ...a, status: s } : a))
+                        }}
+                        className={`text-xs px-2.5 py-1 rounded-full cursor-pointer transition-colors ${
+                          detailAnimal.status === s
+                            ? 'bg-[#3B6D11] text-white'
+                            : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                        }`}>
+                        {s.replace('_', ' ')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Record Birth button + inline form */}
+                {detailAnimal.status === 'in_calf' && (
+                  <div className="space-y-2">
+                    {!showBirthForm ? (
+                      <button onClick={() => { setShowBirthForm(true); setBirthDate(today()) }}
+                        className="w-full bg-[#3B6D11] text-white text-sm font-medium py-2.5 rounded-full hover:bg-[#2d5409] transition-colors cursor-pointer">
+                        Record Birth
+                      </button>
+                    ) : (
+                      <div className="bg-zinc-50 rounded-xl p-3 space-y-2">
+                        <p className="text-xs font-medium text-zinc-700">New Calf Details</p>
+                        <input required value={birthTag} onChange={e => setBirthTag(e.target.value)}
+                          placeholder="Calf tag (required)" className={input} />
+                        <select value={birthGender} onChange={e => setBirthGender(e.target.value as 'M' | 'F')} className={sel}>
+                          <option value="F">Female</option>
+                          <option value="M">Male</option>
+                        </select>
+                        <input type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} className={input} />
+                        <div className="flex gap-2">
+                          <button onClick={() => setShowBirthForm(false)}
+                            className="flex-1 border border-zinc-200 text-zinc-600 text-xs py-2 rounded-full cursor-pointer">
+                            Cancel
+                          </button>
+                          <button disabled={!birthTag.trim()} onClick={() => {
+                            if (!birthTag.trim()) return
+                            addDoc(collection(db, 'cattle'), {
+                              tag: birthTag,
+                              gender: birthGender,
+                              isBull: false,
+                              dob: birthDate,
+                              status: 'active',
+                              group: detailAnimal.group,
+                              motherId: detailAnimal.id,
+                              owner: detailAnimal.owner,
+                              breed: detailAnimal.breed,
+                              paddockId: detailAnimal.paddockId,
+                              notes: null,
+                              active: true,
+                              created_at: Timestamp.now(),
+                            }).catch(console.error)
+                            updateDoc(doc(db, 'cattle', detailAnimal.id), { status: 'active' }).catch(console.error)
+                            const updated = { ...detailAnimal, status: 'active' as AnimalStatus }
+                            setDetailAnimal(updated)
+                            setAnimals(prev => prev.map(a => a.id === detailAnimal.id ? { ...a, status: 'active' as AnimalStatus } : a))
+                            setShowBirthForm(false)
+                            setBirthTag('')
+                            setBirthGender('F')
+                            setBirthDate(today())
+                            fetchAll(true)
+                          }}
+                            className="flex-1 bg-[#3B6D11] text-white text-xs py-2 rounded-full cursor-pointer disabled:opacity-50">
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {detailAnimal.ageYears != null && <InfoRow label="Age" value={`${detailAnimal.ageYears.toFixed(1)} years`} />}
                 {detailAnimal.breed && <InfoRow label="Breed" value={detailAnimal.breed} />}
                 {detailAnimal.group && <InfoRow label="Group" value={`Group ${detailAnimal.group}`} />}
@@ -771,7 +872,7 @@ function Field({ label, children, required }: { label: string; children: React.R
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-zinc-50">
-      <span className="text-xs text-zinc-400">{label}</span>
+      <span className="text-xs text-zinc-500">{label}</span>
       <span className="text-sm text-zinc-900">{value}</span>
     </div>
   )

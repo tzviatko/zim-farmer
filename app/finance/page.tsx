@@ -71,7 +71,7 @@ export default function FinancePage() {
       <header className="sticky top-0 z-40 bg-white border-b border-zinc-100 px-4 py-3.5">
         <div className="max-w-lg mx-auto">
           <h1 className="text-xl font-bold tracking-tight text-zinc-900">Finance</h1>
-          <p className="text-xs text-zinc-400 mt-0.5">Revenue & expenses</p>
+          <p className="text-xs text-zinc-500 mt-0.5">Revenue & expenses</p>
         </div>
       </header>
 
@@ -87,17 +87,17 @@ export default function FinancePage() {
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-green-50 rounded-xl border border-green-100 p-3 text-center">
             <p className="text-base font-bold text-green-800">${totalRevenue.toLocaleString()}</p>
-            <p className="text-[10px] text-green-600 mt-0.5">Revenue</p>
+            <p className="text-xs text-green-600 mt-0.5">Revenue</p>
           </div>
           <div className="bg-red-50 rounded-xl border border-red-100 p-3 text-center">
             <p className="text-base font-bold text-red-800">${totalExpenses.toLocaleString()}</p>
-            <p className="text-[10px] text-red-600 mt-0.5">Expenses</p>
+            <p className="text-xs text-red-600 mt-0.5">Expenses</p>
           </div>
           <div className={`rounded-xl border p-3 text-center ${netProfit >= 0 ? 'bg-[#3B6D11]/5 border-[#3B6D11]/20' : 'bg-amber-50 border-amber-100'}`}>
             <p className={`text-base font-bold ${netProfit >= 0 ? 'text-[#3B6D11]' : 'text-amber-700'}`}>
               {netProfit >= 0 ? '+' : ''}${netProfit.toLocaleString()}
             </p>
-            <p className={`text-[10px] mt-0.5 ${netProfit >= 0 ? 'text-[#3B6D11]' : 'text-amber-600'}`}>Net profit</p>
+            <p className={`text-xs mt-0.5 ${netProfit >= 0 ? 'text-[#3B6D11]' : 'text-amber-600'}`}>Net profit</p>
           </div>
         </div>
 
@@ -151,10 +151,6 @@ export default function FinancePage() {
         {/* Revenue tab */}
         {tab === 'revenue' && (
           <div className="space-y-2">
-            <button onClick={() => setAddOpen('revenue')}
-              className="w-full bg-green-700 text-white rounded-xl py-3 text-sm font-semibold">
-              + Add Revenue
-            </button>
             {filtered.filter(e => e.type === 'revenue').length === 0 && (
               <p className="text-center text-sm text-zinc-400 py-8">No revenue entries this period.</p>
             )}
@@ -165,10 +161,6 @@ export default function FinancePage() {
         {/* Expenses tab */}
         {tab === 'expenses' && (
           <div className="space-y-2">
-            <button onClick={() => setAddOpen('expense')}
-              className="w-full bg-red-700 text-white rounded-xl py-3 text-sm font-semibold">
-              + Add Expense
-            </button>
             {filtered.filter(e => e.type === 'expense').length === 0 && (
               <p className="text-center text-sm text-zinc-400 py-8">No expense entries this period.</p>
             )}
@@ -176,6 +168,16 @@ export default function FinancePage() {
           </div>
         )}
       </div>
+
+      {/* Context-aware FAB */}
+      {(tab === 'revenue' || tab === 'expenses') && (
+        <button onClick={() => setAddOpen(tab === 'revenue' ? 'revenue' : 'expense')}
+          className={`fixed bottom-[106px] right-4 w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-white z-30 active:scale-95 transition-all cursor-pointer ${tab === 'revenue' ? 'bg-green-700 hover:bg-green-800' : 'bg-red-700 hover:bg-red-800'}`}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+      )}
 
       {/* Add modals */}
       <AddEntryModal

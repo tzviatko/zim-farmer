@@ -91,7 +91,7 @@ export default function HRPage() {
       <header className="sticky top-0 z-40 bg-white border-b border-zinc-100 px-4 py-3.5">
         <div className="max-w-lg mx-auto">
           <h1 className="text-xl font-bold tracking-tight text-zinc-900">Staff & HR</h1>
-          <p className="text-xs text-zinc-400 mt-0.5">Salary · Loans · Safety equipment</p>
+          <p className="text-xs text-zinc-500 mt-0.5">Salary · Loans · Safety equipment</p>
         </div>
       </header>
 
@@ -106,7 +106,7 @@ export default function HRPage() {
           ].map(({ label, value }) => (
             <div key={label} className="bg-white rounded-xl border border-zinc-100 p-3 text-center">
               <p className="text-lg font-bold text-zinc-900">{value}</p>
-              <p className="text-[10px] text-zinc-400 mt-0.5">{label}</p>
+              <p className="text-xs text-zinc-500 mt-0.5">{label}</p>
             </div>
           ))}
         </div>
@@ -121,19 +121,11 @@ export default function HRPage() {
           ))}
         </div>
 
-        {/* Add staff button */}
-        {tab === 'staff' && (
-          <button onClick={() => setAddStaffOpen(true)}
-            className="w-full bg-[#3B6D11] text-white rounded-xl py-3 text-sm font-semibold active:opacity-80 transition-opacity">
-            + Add Staff Member
-          </button>
-        )}
-
         {/* Staff list */}
         {tab === 'staff' && !loading && (
           <div className="space-y-2">
             {staff.length === 0 && (
-              <p className="text-center text-sm text-zinc-400 py-8">No active staff — add someone above.</p>
+              <p className="text-center text-sm text-zinc-400 py-8">No active staff. Tap + to add someone.</p>
             )}
             {staff.map(s => (
               <button key={s.id} onClick={() => openStaff(s)}
@@ -141,7 +133,7 @@ export default function HRPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-semibold text-zinc-900">{s.fullName}</p>
-                    <p className="text-xs text-zinc-400 mt-0.5">{s.role ?? 'No role set'}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">{s.role ?? 'No role set'}</p>
                   </div>
                   <div className="text-right">
                     {s.salary != null && (
@@ -192,6 +184,14 @@ export default function HRPage() {
         )}
       </div>
 
+      {/* FAB */}
+      <button onClick={() => setAddStaffOpen(true)}
+        className="fixed bottom-[106px] right-4 w-14 h-14 bg-[#3B6D11] rounded-full shadow-xl flex items-center justify-center text-white z-30 hover:bg-[#2d5409] active:scale-95 transition-all cursor-pointer">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
+
       {/* Add Staff Modal */}
       <AddStaffModal
         open={addStaffOpen}
@@ -201,7 +201,7 @@ export default function HRPage() {
 
       {/* Staff Detail Modal */}
       {selectedStaff && (
-        <Modal open title={selectedStaff.fullName} onClose={() => setSelectedStaff(null)}>
+        <Modal open title={selectedStaff.fullName} onClose={() => setSelectedStaff(null)} minContentHeight="360px">
           {/* Sub-tabs */}
           <div className="flex gap-1 bg-zinc-50 rounded-xl p-1 mb-4">
             {([['info', 'Info'], ['salary', 'Salary'], ['loans', 'Loans'], ['safety', 'Safety']] as [StaffTab, string][]).map(([t, label]) => (
@@ -318,7 +318,7 @@ function StaffInfoTab({ staff, onEdit }: { staff: StaffWithStats; onEdit: () => 
       <div className="space-y-3">
         {rows.map(([label, value]) => value ? (
           <div key={label as string}>
-            <p className="text-[10px] text-zinc-400 uppercase tracking-widest">{label}</p>
+            <p className="text-xs text-zinc-500 uppercase tracking-widest">{label}</p>
             <p className="text-sm text-zinc-900 mt-0.5">{value}</p>
           </div>
         ) : null)}
@@ -397,7 +397,7 @@ function LoansTab({ staff, loans, onRecord }: {
               )}
             </div>
             {l.loanAmountGiven && l.repaymentPeriodMonths && (
-              <p className="text-[10px] text-zinc-400 mt-1">
+              <p className="text-xs text-zinc-500 mt-1">
                 Repay over {l.repaymentPeriodMonths} months
                 (${(l.loanAmountGiven / l.repaymentPeriodMonths).toFixed(2)}/mo)
               </p>
@@ -434,7 +434,7 @@ function SafetyTab({ staff, records, onGive }: {
             <div key={item} className="flex items-center justify-between bg-zinc-50 rounded-xl px-4 py-3">
               <p className="text-sm text-zinc-800">{item}</p>
               {lastDate
-                ? <span className="text-[10px] text-zinc-400">Last: {lastDate}</span>
+                ? <span className="text-xs text-zinc-500">Last: {lastDate}</span>
                 : <span className="text-[10px] text-amber-700">Never issued</span>}
             </div>
           )

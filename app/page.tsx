@@ -11,6 +11,9 @@ type Stats = {
   animals: number
   active: number
   inCalf: number
+  sold: number
+  lost: number
+  deceased: number
   dipOverdue: number
   staff: number
   inventoryAlerts: number
@@ -57,12 +60,15 @@ export default function Dashboard() {
         })
 
         const animals = cattleSnap.docs
-        let active = 0, inCalf = 0, dipOverdue = 0
+        let active = 0, inCalf = 0, sold = 0, lost = 0, deceased = 0, dipOverdue = 0
         animals.forEach(d => {
           const data = d.data()
           const status = (data.status ?? (data.active ? 'active' : 'sold')) as string
           if (status === 'active') active++
           if (status === 'in_calf') inCalf++
+          if (status === 'sold') sold++
+          if (status === 'lost') lost++
+          if (status === 'deceased') deceased++
           const dipStatus = getDipStatus(lastDip.get(d.id) ?? null)
           if (dipStatus === 'overdue') dipOverdue++
         })
@@ -119,6 +125,9 @@ export default function Dashboard() {
           animals: animals.length,
           active,
           inCalf,
+          sold,
+          lost,
+          deceased,
           dipOverdue,
           staff: staffSnap.size,
           inventoryAlerts,
@@ -140,8 +149,13 @@ export default function Dashboard() {
       <header className="sticky top-0 z-40 bg-white border-b border-zinc-100 px-4 py-3.5">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-zinc-900">ZIM FARMER</h1>
-            <span className="w-2 h-2 rounded-full bg-[#3B6D11]" />
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold tracking-tight text-zinc-900">ZIM FARMER</h1>
+                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#3B6D11]' : 'bg-zinc-400'}`} />
+              </div>
+              <p className="text-xs text-zinc-500 mt-0.5">Farm overview</p>
+            </div>
           </div>
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isOnline ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
             {isOnline ? 'Online' : 'Offline'}
@@ -166,7 +180,13 @@ export default function Dashboard() {
             label="Livestock"
             icon="🐄"
             primary={loading ? '—' : String(stats!.animals)}
-            sub={loading ? '' : `${stats!.active} active · ${stats!.inCalf} in calf`}
+            sub={loading ? '' : [
+              stats!.active > 0 && `${stats!.active} active`,
+              stats!.inCalf > 0 && `${stats!.inCalf} in calf`,
+              stats!.sold > 0 && `${stats!.sold} sold`,
+              stats!.lost > 0 && `${stats!.lost} lost`,
+              stats!.deceased > 0 && `${stats!.deceased} deceased`,
+            ].filter(Boolean).join(' · ')}
             alert={!loading && stats!.dipOverdue > 0 ? `${stats!.dipOverdue} dip overdue` : null}
           />
           <ModuleCard
@@ -174,7 +194,7 @@ export default function Dashboard() {
             label="Inventory"
             icon="📦"
             primary={loading ? '—' : `${stats!.inventoryAlerts}`}
-            sub="items need restock"
+            sub={loading ? '' : stats!.inventoryAlerts === 1 ? '1 item low stock' : stats!.inventoryAlerts > 0 ? `${stats!.inventoryAlerts} items low stock` : 'all stocked'}
             alert={!loading && stats!.inventoryAlerts > 0 ? 'Low stock' : null}
           />
           <ModuleCard
@@ -190,7 +210,7 @@ export default function Dashboard() {
             label="Vehicles"
             icon="🚜"
             primary={loading ? '—' : String(stats!.vehicles)}
-            sub="registered vehicles"
+            sub={loading ? '' : stats!.vehicleAlerts > 0 ? `${stats!.vehicleAlerts} service due` : 'all up to date'}
             alert={!loading && stats!.vehicleAlerts > 0 ? `${stats!.vehicleAlerts} service due` : null}
           />
         </div>
@@ -251,8 +271,8 @@ function ModuleCard({
           <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium">{alert}</span>
         )}
       </div>
+      <p className="text-xs text-zinc-400 mb-0.5">{label}</p>
       <p className="text-2xl font-bold text-zinc-900">{primary}</p>
-      <p className="text-xs text-zinc-400 mt-0.5">{label}</p>
       {sub && <p className="text-[11px] text-zinc-500 mt-1">{sub}</p>}
     </Link>
   )
