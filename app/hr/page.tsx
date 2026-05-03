@@ -42,31 +42,37 @@ export default function HRPage() {
   const [editStaffOpen, setEditStaffOpen] = useState(false)
 
   async function load() {
-    const [staffSnap, loanSnap, salarySnap, safetySnap] = await Promise.all([
-      getDocs(query(collection(db, 'staff'), where('active', '==', true))),
-      getDocs(collection(db, 'loan_records')),
-      getDocs(collection(db, 'salary_payments')),
-      getDocs(collection(db, 'safety_equipment_given')),
-    ])
+    setLoading(true)
+    try {
+      const [staffSnap, loanSnap, salarySnap, safetySnap] = await Promise.all([
+        getDocs(query(collection(db, 'staff'), where('active', '==', true))),
+        getDocs(collection(db, 'loan_records')),
+        getDocs(collection(db, 'salary_payments')),
+        getDocs(collection(db, 'safety_equipment_given')),
+      ])
 
-    const loanData: LoanRecord[] = loanSnap.docs.map(d => ({ id: d.id, ...d.data() } as LoanRecord))
-    const salaryData: SalaryPayment[] = salarySnap.docs.map(d => ({ id: d.id, ...d.data() } as SalaryPayment))
-    const safetyData: SafetyEquipmentGiven[] = safetySnap.docs.map(d => ({ id: d.id, ...d.data() } as SafetyEquipmentGiven))
+      const loanData: LoanRecord[] = loanSnap.docs.map(d => ({ id: d.id, ...d.data() } as LoanRecord))
+      const salaryData: SalaryPayment[] = salarySnap.docs.map(d => ({ id: d.id, ...d.data() } as SalaryPayment))
+      const safetyData: SafetyEquipmentGiven[] = safetySnap.docs.map(d => ({ id: d.id, ...d.data() } as SafetyEquipmentGiven))
 
-    const staffData: StaffWithStats[] = staffSnap.docs.map(d => {
-      const m = { id: d.id, ...d.data() } as StaffMember
-      return {
-        ...m,
-        loanBalance: computeLoanBalance(loanData, d.id),
-        monthlyRepayment: computeMonthlyRepayment(loanData, d.id),
-      }
-    }).sort((a, b) => a.fullName.localeCompare(b.fullName))
+      const staffData: StaffWithStats[] = staffSnap.docs.map(d => {
+        const m = { id: d.id, ...d.data() } as StaffMember
+        return {
+          ...m,
+          loanBalance: computeLoanBalance(loanData, d.id),
+          monthlyRepayment: computeMonthlyRepayment(loanData, d.id),
+        }
+      }).sort((a, b) => a.fullName.localeCompare(b.fullName))
 
-    setStaff(staffData)
-    setLoans(loanData)
-    setSalaryPayments(salaryData)
-    setSafetyRecords(safetyData)
-    setLoading(false)
+      setStaff(staffData)
+      setLoans(loanData)
+      setSalaryPayments(salaryData)
+      setSafetyRecords(safetyData)
+    } catch (err) {
+      console.error('HR load failed:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {

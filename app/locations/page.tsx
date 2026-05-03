@@ -17,10 +17,16 @@ export default function LocationsPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [name, setName] = useState('')
   async function load() {
-    const snap = await getDocs(collection(db, 'paddocks'))
-    setLocations(snap.docs.map(d => ({ id: d.id, name: d.data().name as string }))
-      .sort((a, b) => a.name.localeCompare(b.name)))
-    setLoading(false)
+    setLoading(true)
+    try {
+      const snap = await getDocs(collection(db, 'paddocks'))
+      setLocations(snap.docs.map(d => ({ id: d.id, name: d.data().name as string }))
+        .sort((a, b) => a.name.localeCompare(b.name)))
+    } catch (err) {
+      console.error('Locations load failed:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {

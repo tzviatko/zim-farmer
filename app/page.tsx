@@ -6,6 +6,7 @@ import { collection, getDocs, query, where, orderBy, limit } from 'firebase/fire
 import { db } from '../lib/firebase'
 import { computeAnimalType, getDipStatus } from '../lib/types'
 import { seedTestData } from '../lib/seed'
+import { prefetchAllCollections } from '../lib/prefetch'
 
 type Stats = {
   animals: number
@@ -134,6 +135,10 @@ export default function Dashboard() {
           vehicles: vehicleSnap.size,
           vehicleAlerts,
         })
+
+        // Warm the cache for all other pages in the background so they're
+        // available offline even if never visited while online
+        prefetchAllCollections().catch(() => {})
       } catch (err) {
         console.error('Dashboard load failed:', err)
       } finally {

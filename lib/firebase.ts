@@ -1,5 +1,8 @@
 import { initializeApp, getApps } from 'firebase/app'
-import { getFirestore } from 'firebase/firestore'
+import {
+  initializeFirestore, getFirestore,
+  persistentLocalCache, persistentMultipleTabManager,
+} from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -11,4 +14,18 @@ const firebaseConfig = {
 }
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
-export const db = getFirestore(app)
+
+function initDb() {
+  // IndexedDB persistence is browser-only; fall back to memory cache on the server
+  if (typeof window === 'undefined') return getFirestore(app)
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    })
+  } catch {
+    // Already initialised (e.g. HMR in dev) — reuse the existing instance
+    return getFirestore(app)
+  }
+}
+
+export const db = initDb()

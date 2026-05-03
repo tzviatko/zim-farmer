@@ -42,20 +42,26 @@ export default function FinancePage() {
   const monthLabel = new Date(monthFilter + '-02').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   async function load() {
-    const [revSnap, expSnap] = await Promise.all([
-      getDocs(collection(db, 'revenue_entries')),
-      getDocs(collection(db, 'expense_entries')),
-    ])
-    const revs: Entry[] = revSnap.docs.map(d => ({
-      id: d.id, type: 'revenue' as const,
-      ...(d.data() as { description: string; category: string | null; amount: number; date: string }),
-    }))
-    const exps: Entry[] = expSnap.docs.map(d => ({
-      id: d.id, type: 'expense' as const,
-      ...(d.data() as { description: string; category: string | null; amount: number; date: string }),
-    }))
-    setEntries([...revs, ...exps].sort((a, b) => b.date.localeCompare(a.date)))
-    setLoading(false)
+    setLoading(true)
+    try {
+      const [revSnap, expSnap] = await Promise.all([
+        getDocs(collection(db, 'revenue_entries')),
+        getDocs(collection(db, 'expense_entries')),
+      ])
+      const revs: Entry[] = revSnap.docs.map(d => ({
+        id: d.id, type: 'revenue' as const,
+        ...(d.data() as { description: string; category: string | null; amount: number; date: string }),
+      }))
+      const exps: Entry[] = expSnap.docs.map(d => ({
+        id: d.id, type: 'expense' as const,
+        ...(d.data() as { description: string; category: string | null; amount: number; date: string }),
+      }))
+      setEntries([...revs, ...exps].sort((a, b) => b.date.localeCompare(a.date)))
+    } catch (err) {
+      console.error('Finance load failed:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
