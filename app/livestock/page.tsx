@@ -504,98 +504,6 @@ export default function LivestockPage() {
         </svg>
       </button>
 
-      {/* ── Add / Edit modal ──────────────────────────────────────────────── */}
-      <Modal open={showForm} onClose={() => setShowForm(false)} title={editId ? 'Edit Animal' : 'Add Animal'}>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Tag" required>
-              <input required value={form.tag} onChange={e => setForm({ ...form, tag: e.target.value })}
-                placeholder="e.g. 0042" className={input} />
-            </Field>
-            <Field label="Gender">
-              <select value={form.gender} onChange={e => setForm({ ...form, gender: e.target.value as AnimalGender })} className={sel}>
-                <option value="F">Female</option>
-                <option value="M">Male</option>
-              </select>
-            </Field>
-          </div>
-
-          {form.gender === 'M' && (
-            <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
-              <input type="checkbox" checked={form.isBull}
-                onChange={e => setForm({ ...form, isBull: e.target.checked })}
-                className="rounded" />
-              Mark as Bull
-            </label>
-          )}
-
-          {form.gender === 'F' && (
-            <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
-              <input type="checkbox" checked={form.status === 'in_calf'}
-                onChange={e => setForm({ ...form, status: e.target.checked ? 'in_calf' : 'active' })}
-                className="rounded" />
-              In calf
-            </label>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Status">
-              <select value={form.status === 'in_calf' ? 'active' : form.status} onChange={e => setForm({ ...form, status: e.target.value as AnimalStatus })} className={sel}>
-                {STATUS_OPTS.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-              </select>
-            </Field>
-            <Field label="Group">
-              <select value={form.group} onChange={e => setForm({ ...form, group: e.target.value })} className={sel}>
-                <option value="">None</option>
-                {GROUP_OPTS.map(g => <option key={g} value={g}>Group {g}</option>)}
-              </select>
-            </Field>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Date of Birth">
-              <input type="date" value={form.dob} onChange={e => setForm({ ...form, dob: e.target.value })} className={input} />
-            </Field>
-            <Field label="Paddock">
-              <select value={form.paddockId} onChange={e => setForm({ ...form, paddockId: e.target.value })} className={sel}>
-                <option value="">None</option>
-                {paddocks.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </Field>
-          </div>
-
-          <Field label="Breed">
-            <input value={form.breed} onChange={e => setForm({ ...form, breed: e.target.value })}
-              placeholder="e.g. Brahman, Nguni" className={input} />
-          </Field>
-
-          <Field label="Owner">
-            <select value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })} className={sel}>
-              <option value="">Unknown</option>
-              {OWNER_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </Field>
-
-          <Field label="Notes">
-            <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
-              rows={2} className={`${input} resize-none`} placeholder="Optional…" />
-          </Field>
-
-          {formError && <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{formError}</p>}
-
-          <button type="submit"
-            className="w-full bg-[#3B6D11] text-white text-sm font-medium py-3 rounded-full hover:bg-[#2d5409] transition-colors cursor-pointer">
-            {editId ? 'Save Changes' : 'Add Animal'}
-          </button>
-          {editId && (
-            <button type="button" onClick={handleRemove}
-              className="w-full text-red-500 text-sm py-2 rounded-full hover:bg-red-50 transition-colors cursor-pointer">
-              Remove from registry
-            </button>
-          )}
-        </form>
-      </Modal>
-
       {/* ── Animal detail modal ───────────────────────────────────────────── */}
       <Modal open={!!detailAnimal} onClose={() => { setDetailAnimal(null); setShowBirthForm(false) }} title={detailAnimal ? `Tag ${fmt(detailAnimal.tag)}` : ''} minContentHeight="380px">
         {detailAnimal && (
@@ -805,6 +713,98 @@ export default function LivestockPage() {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* ── Add / Edit modal (rendered after detail so it appears on top) ── */}
+      <Modal open={showForm} onClose={() => setShowForm(false)} title={editId ? 'Edit Animal' : 'Add Animal'}>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Tag" required>
+              <input required value={form.tag} onChange={e => setForm({ ...form, tag: e.target.value })}
+                placeholder="e.g. 0042" className={input} />
+            </Field>
+            <Field label="Gender">
+              <select value={form.gender} onChange={e => setForm({ ...form, gender: e.target.value as AnimalGender })} className={sel}>
+                <option value="F">Female</option>
+                <option value="M">Male</option>
+              </select>
+            </Field>
+          </div>
+
+          {form.gender === 'M' && (
+            <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
+              <input type="checkbox" checked={form.isBull}
+                onChange={e => setForm({ ...form, isBull: e.target.checked })}
+                className="rounded" />
+              Mark as Bull
+            </label>
+          )}
+
+          {form.gender === 'F' && (
+            <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
+              <input type="checkbox" checked={form.status === 'in_calf'}
+                onChange={e => setForm({ ...form, status: e.target.checked ? 'in_calf' : 'active' })}
+                className="rounded" />
+              In calf
+            </label>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Status">
+              <select value={form.status === 'in_calf' ? 'active' : form.status} onChange={e => setForm({ ...form, status: e.target.value as AnimalStatus })} className={sel}>
+                {STATUS_OPTS.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+              </select>
+            </Field>
+            <Field label="Group">
+              <select value={form.group} onChange={e => setForm({ ...form, group: e.target.value })} className={sel}>
+                <option value="">None</option>
+                {GROUP_OPTS.map(g => <option key={g} value={g}>Group {g}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Date of Birth">
+              <input type="date" value={form.dob} onChange={e => setForm({ ...form, dob: e.target.value })} className={input} />
+            </Field>
+            <Field label="Paddock">
+              <select value={form.paddockId} onChange={e => setForm({ ...form, paddockId: e.target.value })} className={sel}>
+                <option value="">None</option>
+                {paddocks.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          <Field label="Breed">
+            <input value={form.breed} onChange={e => setForm({ ...form, breed: e.target.value })}
+              placeholder="e.g. Brahman, Nguni" className={input} />
+          </Field>
+
+          <Field label="Owner">
+            <select value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })} className={sel}>
+              <option value="">Unknown</option>
+              {OWNER_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </Field>
+
+          <Field label="Notes">
+            <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
+              rows={2} className={`${input} resize-none`} placeholder="Optional…" />
+          </Field>
+
+          {formError && <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{formError}</p>}
+
+          <button type="submit"
+            className="w-full bg-[#3B6D11] text-white text-sm font-medium py-3 rounded-full hover:bg-[#2d5409] transition-colors cursor-pointer">
+            {editId ? 'Save Changes' : 'Add Animal'}
+          </button>
+          {editId && (
+            <button type="button" onClick={handleRemove}
+              className="w-full text-red-500 text-sm py-2 rounded-full hover:bg-red-50 transition-colors cursor-pointer">
+              Remove from registry
+            </button>
+          )}
+        </form>
       </Modal>
 
       {/* ── Batch dip modal ────────────────────────────────────────────────── */}
