@@ -1,14 +1,76 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { collection, getDocs, addDoc, updateDoc, doc, query, where, orderBy, Timestamp } from 'firebase/firestore'
+import { collection, getDocs, addDoc, updateDoc, doc, query, where, Timestamp } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import Modal from '../../components/Modal'
 import { InventoryItem, InventoryTransaction, InventoryMetric, computeBalance } from '../../lib/types'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Cell,
+} from 'recharts'
+
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 type Location = { id: string; name: string }
+type StockStatus = 'critical' | 'low' | 'ok' | 'unknown'
+type StatFilter = 'critical' | 'low' | 'ok' | null
+
+type EnrichedItem = InventoryItem & {
+  currentBalance: number
+  status: StockStatus
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function today() { return new Date().toISOString().slice(0, 10) }
+
+function getStockStatus(balance: number, parLevel: number | null): StockStatus {
+  if (parLevel == null) return 'unknown'
+  if (balance <= parLevel) return 'critical'
+  if (balance <= parLevel * 1.5) return 'low'
+  return 'ok'
+}
+
+const STATUS_ORDER: StockStatus[] = ['critical', 'low', 'ok', 'unknown']
+
+const STATUS_STYLES: Record<StockStatus, { border: string; bg: string; badge: string; bar: string; dot: string }> = {
+  critical: {
+    border: 'border-red-200',
+    bg: 'bg-red-50/40',
+    badge: 'bg-red-100 text-red-700',
+    bar: 'bg-red-400',
+    dot: 'bg-red-400',
+  },
+  low: {
+    border: 'border-amber-200',
+    bg: 'bg-amber-50/40',
+    badge: 'bg-amber-100 text-amber-700',
+    bar: 'bg-amber-400',
+    dot: 'bg-amber-400',
+  },
+  ok: {
+    border: 'border-green-100',
+    bg: 'bg-white',
+    badge: 'bg-green-100 text-green-700',
+    bar: 'bg-[#3B6D11]',
+    dot: 'bg-[#3B6D11]',
+  },
+  unknown: {
+    border: 'border-zinc-100',
+    bg: 'bg-white',
+    badge: 'bg-zinc-100 text-zinc-500',
+    bar: 'bg-zinc-300',
+    dot: 'bg-zinc-300',
+  },
+}
+
+const STATUS_LABEL: Record<StockStatus, string> = {
+  critical: 'Restock now',
+  low: 'Restock soon',
+  ok: 'In stock',
+  unknown: 'No par set',
+}
 
 const input = 'w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20 bg-white'
 const sel = input
@@ -22,6 +84,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
+// ── Page ───────────────────────────────────────────────────────────────────────
+
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [transactions, setTransactions] = useState<InventoryTransaction[]>([])
@@ -29,22 +93,23 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true)
   const [isOnline, setIsOnline] = useState(true)
 
+  // Filters
+  const [statFilter, setStatFilter] = useState<StatFilter>(null)
+  const [locationFilter, setLocationFilter] = useState<string | null>(null) // location id
+
   // Selected item for detail view
-  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
+  const [selectedItem, setSelectedItem] = useState<EnrichedItem | null>(null)
 
   // Add/edit item modal
   const [showItemForm, setShowItemForm] = useState(false)
   const [editItemId, setEditItemId] = useState<string | null>(null)
   const [itemForm, setItemForm] = useState({ name: '', metric: 'kg' as InventoryMetric, locationId: '', parLevel: '' })
-  const [itemSubmitting, setItemSubmitting] = useState(false)
   const [itemError, setItemError] = useState<string | null>(null)
 
   // In/Out transaction modal
   const [showTxForm, setShowTxForm] = useState(false)
   const [txType, setTxType] = useState<'in' | 'out'>('in')
   const [txForm, setTxForm] = useState({ itemId: '', date: today(), description: '', quantity: '' })
-  const [txSubmitting, setTxSubmitting] = useState(false)
-  const [txError, setTxError] = useState<string | null>(null)
 
   useEffect(() => {
     setIsOnline(navigator.onLine)
@@ -62,7 +127,9 @@ export default function InventoryPage() {
         getDocs(collection(db, 'paddocks')),
       ])
 
-      setLocations(locSnap.docs.map(d => ({ id: d.id, name: d.data().name as string })).sort((a, b) => a.name.localeCompare(b.name)))
+      setLocations(locSnap.docs
+        .map(d => ({ id: d.id, name: d.data().name as string }))
+        .sort((a, b) => a.name.localeCompare(b.name)))
 
       const txList: InventoryTransaction[] = txSnap.docs.map(d => ({
         id: d.id,
@@ -71,7 +138,7 @@ export default function InventoryPage() {
         description: (d.data().description ?? null) as string | null,
         quantityIn: (d.data().quantityIn ?? null) as number | null,
         quantityOut: (d.data().quantityOut ?? null) as number | null,
-        createdAt: d.data().createdAt as string ?? '',
+        createdAt: (d.data().createdAt as string) ?? '',
       })).sort((a, b) => b.date.localeCompare(a.date))
 
       const itemList: InventoryItem[] = itemSnap.docs.map(d => ({
@@ -81,8 +148,8 @@ export default function InventoryPage() {
         locationId: (d.data().locationId ?? null) as string | null,
         parLevel: (d.data().parLevel ?? null) as number | null,
         active: true,
-        createdAt: d.data().createdAt as string ?? '',
-      })).sort((a, b) => a.name.localeCompare(b.name))
+        createdAt: (d.data().createdAt as string) ?? '',
+      }))
 
       setTransactions(txList)
       setItems(itemList)
@@ -95,55 +162,101 @@ export default function InventoryPage() {
 
   useEffect(() => { fetchAll() }, [])
 
-  // Enrich items with computed balance
-  const enrichedItems = useMemo(() =>
+  // ── Derived data ─────────────────────────────────────────────────────────────
+
+  const enrichedItems = useMemo<EnrichedItem[]>(() =>
     items.map(item => {
       const balance = computeBalance(transactions, item.id)
-      return {
-        ...item,
-        currentBalance: balance,
-        needsReplenishment: item.parLevel != null && balance <= item.parLevel,
-      }
+      return { ...item, currentBalance: balance, status: getStockStatus(balance, item.parLevel) }
     }),
     [items, transactions]
   )
 
-  const itemTransactions = useMemo(() =>
+  // Sorted: critical → low → ok → unknown
+  const sortedItems = useMemo(() =>
+    [...enrichedItems].sort((a, b) =>
+      STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) ||
+      a.name.localeCompare(b.name)
+    ),
+    [enrichedItems]
+  )
+
+  const filteredItems = useMemo(() => {
+    let list = sortedItems
+    if (statFilter) list = list.filter(i => i.status === statFilter)
+    if (locationFilter) list = list.filter(i => i.locationId === locationFilter)
+    return list
+  }, [sortedItems, statFilter, locationFilter])
+
+  // Stat counts
+  const counts = useMemo(() => ({
+    total: enrichedItems.length,
+    critical: enrichedItems.filter(i => i.status === 'critical').length,
+    low: enrichedItems.filter(i => i.status === 'low').length,
+  }), [enrichedItems])
+
+  // Location bar chart data
+  const locationChartData = useMemo(() => {
+    const map = new Map<string, number>()
+    enrichedItems.forEach(i => {
+      const loc = i.locationId
+        ? (locations.find(l => l.id === i.locationId)?.name ?? 'Unknown')
+        : 'No location'
+      map.set(loc, (map.get(loc) ?? 0) + 1)
+    })
+    return Array.from(map.entries()).map(([name, value]) => ({
+      name,
+      value,
+      id: locations.find(l => l.name === name)?.id ?? null,
+    }))
+  }, [enrichedItems, locations])
+
+  // Per-item data for the detail modal
+  const selectedTransactions = useMemo(() =>
     selectedItem ? transactions.filter(t => t.itemId === selectedItem.id) : [],
     [transactions, selectedItem]
   )
 
-  // Running balance for selected item's transaction list
+  // Running balance (most-recent first)
   const txWithBalance = useMemo(() => {
-    const sorted = [...itemTransactions].sort((a, b) => a.date.localeCompare(b.date))
+    const sorted = [...selectedTransactions].sort((a, b) => a.date.localeCompare(b.date))
     let running = 0
     return sorted.map(t => {
       running += (t.quantityIn ?? 0) - (t.quantityOut ?? 0)
       return { ...t, balance: running }
     }).reverse()
-  }, [itemTransactions])
+  }, [selectedTransactions])
 
-  // ── Item form ──────────────────────────────────────────────────────────────
+  // Average monthly usage chart
+  const avgUsageChart = useMemo(() => {
+    if (!selectedItem) return []
+    const monthMap = new Map<string, number>()
+    selectedTransactions.forEach(t => {
+      if (!t.quantityOut || !t.date) return
+      const month = t.date.slice(0, 7) // YYYY-MM
+      monthMap.set(month, (monthMap.get(month) ?? 0) + t.quantityOut)
+    })
+    return Array.from(monthMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, total]) => ({ month: month.slice(5), total })) // show MM only
+  }, [selectedTransactions, selectedItem])
+
+  // ── Form handlers ─────────────────────────────────────────────────────────────
 
   function openAddItem() {
     setItemForm({ name: '', metric: 'kg', locationId: '', parLevel: '' })
-    setEditItemId(null)
-    setItemError(null)
-    setShowItemForm(true)
+    setEditItemId(null); setItemError(null); setShowItemForm(true)
   }
 
   function openEditItem(item: InventoryItem) {
     setItemForm({ name: item.name, metric: item.metric, locationId: item.locationId ?? '', parLevel: item.parLevel?.toString() ?? '' })
-    setEditItemId(item.id)
-    setItemError(null)
-    setShowItemForm(true)
+    setEditItemId(item.id); setItemError(null); setShowItemForm(true)
   }
 
   function handleItemSubmit(e: React.FormEvent) {
     e.preventDefault()
     const payload = {
-      name: itemForm.name,
-      metric: itemForm.metric,
+      name: itemForm.name, metric: itemForm.metric,
       locationId: itemForm.locationId || null,
       parLevel: itemForm.parLevel ? parseFloat(itemForm.parLevel) : null,
       active: true,
@@ -153,24 +266,18 @@ export default function InventoryPage() {
     } else {
       addDoc(collection(db, 'inventory_items'), { ...payload, createdAt: Timestamp.now().toDate().toISOString() }).catch(console.error)
     }
-    setShowItemForm(false)
-    fetchAll(true)
+    setShowItemForm(false); fetchAll(true)
   }
 
   function handleRemoveItem() {
     if (!editItemId) return
     updateDoc(doc(db, 'inventory_items', editItemId), { active: false }).catch(console.error)
-    setShowItemForm(false)
-    setSelectedItem(null)
-    fetchAll(true)
+    setShowItemForm(false); setSelectedItem(null); fetchAll(true)
   }
-
-  // ── Transaction form ───────────────────────────────────────────────────────
 
   function openTx(type: 'in' | 'out', item?: InventoryItem) {
     setTxType(type)
     setTxForm({ itemId: item?.id ?? '', date: today(), description: '', quantity: '' })
-    setTxError(null)
     setShowTxForm(true)
   }
 
@@ -179,89 +286,167 @@ export default function InventoryPage() {
     const qty = parseFloat(txForm.quantity)
     if (isNaN(qty) || qty <= 0) return
     addDoc(collection(db, 'inventory_transactions'), {
-      itemId: txForm.itemId,
-      date: txForm.date,
+      itemId: txForm.itemId, date: txForm.date,
       description: txForm.description || null,
       quantityIn: txType === 'in' ? qty : null,
       quantityOut: txType === 'out' ? qty : null,
       createdAt: Timestamp.now().toDate().toISOString(),
     }).catch(console.error)
-    setShowTxForm(false)
-    fetchAll(true)
+    setShowTxForm(false); fetchAll(true)
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-
-  const alerts = enrichedItems.filter(i => i.needsReplenishment).length
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-[#F5F5F0] font-[family-name:var(--font-syne)] pb-[100px]">
       <header className="sticky top-0 z-40 bg-white border-b border-zinc-100 px-4 py-3.5">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-zinc-900">Inputs</h1>
-              <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#3B6D11]' : 'bg-zinc-400'}`} />
-            </div>
-            <p className="text-xs text-zinc-500 mt-0.5">Stock levels · In/Out log</p>
+        <div className="max-w-lg mx-auto">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900">Inputs</h1>
+            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#3B6D11]' : 'bg-zinc-400'}`} />
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => openTx('in')}
-              className="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-full font-medium cursor-pointer hover:bg-green-100 transition-colors">+ In</button>
-            <button onClick={() => openTx('out')}
-              className="text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-full font-medium cursor-pointer hover:bg-red-100 transition-colors">− Out</button>
-          </div>
+          <p className="text-xs text-zinc-500 mt-0.5">Stock levels · In/Out log</p>
         </div>
       </header>
 
       {!isOnline && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2">
-          <p className="text-xs text-amber-700 text-center max-w-lg mx-auto">Offline — changes are saved locally and will sync when you reconnect.</p>
+          <p className="text-xs text-amber-700 text-center max-w-lg mx-auto">
+            Offline — changes are saved locally and will sync when you reconnect.
+          </p>
         </div>
       )}
 
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
 
-        {alerts > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2">
-            <span className="text-amber-600 text-lg">⚠️</span>
-            <p className="text-sm text-amber-800 font-medium">{alerts} item{alerts !== 1 ? 's' : ''} need restocking</p>
+        {/* ── Stat squares ── */}
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            { label: 'Total Inputs', value: counts.total,    filter: null,       activeColor: 'bg-zinc-800 text-white' },
+            { label: 'Restock Now',  value: counts.critical,  filter: 'critical' as StatFilter, activeColor: 'bg-red-500 text-white' },
+            { label: 'Restock Soon', value: counts.low,       filter: 'low' as StatFilter,      activeColor: 'bg-amber-400 text-white' },
+          ]).map(s => (
+            <button key={s.label}
+              onClick={() => setStatFilter(prev => prev === s.filter ? null : s.filter)}
+              className={`rounded-xl border p-3 shadow-sm text-center transition-all cursor-pointer ${
+                statFilter === s.filter
+                  ? s.activeColor + ' border-transparent'
+                  : 'bg-white border-zinc-100 text-zinc-900'
+              }`}>
+              <p className="text-xl font-bold">{loading ? '—' : s.value}</p>
+              <p className={`text-[10px] uppercase tracking-wide mt-0.5 ${statFilter === s.filter ? 'opacity-80' : 'text-zinc-400'}`}>
+                {s.label}
+              </p>
+            </button>
+          ))}
+        </div>
+
+        {/* ── Restock banner ── */}
+        {!loading && counts.critical > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex items-center gap-2">
+            <span className="text-red-500">⚠</span>
+            <p className="text-sm text-red-800 font-medium">
+              {counts.critical} item{counts.critical !== 1 ? 's' : ''} need restocking now
+              {counts.low > 0 && `, ${counts.low} more running low`}
+            </p>
           </div>
         )}
 
-        {/* Items grid */}
-        {loading ? (
-          <div className="grid grid-cols-1 gap-3">
-            {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-white rounded-2xl animate-pulse border border-zinc-100" />)}
+        {/* ── In / Out buttons ── */}
+        <div className="flex gap-2">
+          <button onClick={() => openTx('in')}
+            className="flex-1 bg-green-50 text-green-700 text-sm font-medium py-2.5 rounded-full cursor-pointer hover:bg-green-100 transition-colors">
+            + Stock In
+          </button>
+          <button onClick={() => openTx('out')}
+            className="flex-1 bg-red-50 text-red-600 text-sm font-medium py-2.5 rounded-full cursor-pointer hover:bg-red-100 transition-colors">
+            − Stock Out
+          </button>
+        </div>
+
+        {/* ── Location bar chart ── */}
+        {!loading && locationChartData.length > 0 && (
+          <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4">
+            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-3">Items by Location</p>
+            <div style={{ height: 90 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={locationChartData} margin={{ top: 0, right: 4, bottom: 0, left: -20 }} barSize={18}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f4" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                  <YAxis tick={{ fontSize: 9 }} allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="value" radius={[3, 3, 0, 0]} cursor="pointer"
+                    onClick={(entry) => {
+                      const clickedId = entry.id as string | null
+                      setLocationFilter(prev => prev === clickedId ? null : clickedId)
+                    }}>
+                    {locationChartData.map((entry, i) => (
+                      <Cell key={i}
+                        fill={locationFilter === entry.id ? '#1a3d06' : '#3B6D11'}
+                        opacity={locationFilter && locationFilter !== entry.id ? 0.35 : 1} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            {locationFilter && (
+              <button onClick={() => setLocationFilter(null)}
+                className="mt-1 text-xs text-zinc-400 underline w-full text-center cursor-pointer">
+                Clear location filter
+              </button>
+            )}
           </div>
-        ) : enrichedItems.length === 0 ? (
-          <p className="text-center text-zinc-400 text-sm py-16">No inventory items yet.</p>
+        )}
+
+        {/* ── Items list ── */}
+        {loading ? (
+          <div className="space-y-2">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-20 bg-white rounded-2xl animate-pulse border border-zinc-100" />
+            ))}
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <p className="text-center text-zinc-400 text-sm py-16">
+            {enrichedItems.length === 0 ? 'No inputs recorded yet.' : 'No items match this filter.'}
+          </p>
         ) : (
           <div className="space-y-2">
-            {enrichedItems.map(item => {
-              const pct = item.parLevel && item.currentBalance != null
+            {filteredItems.map(item => {
+              const st = STATUS_STYLES[item.status]
+              const pct = item.parLevel
                 ? Math.min(100, Math.max(0, (item.currentBalance / (item.parLevel * 2)) * 100))
                 : null
-              const urgent = item.needsReplenishment
+              const locName = item.locationId
+                ? locations.find(l => l.id === item.locationId)?.name
+                : null
               return (
                 <button key={item.id} onClick={() => setSelectedItem(item)}
-                  className={`w-full bg-white rounded-2xl border px-4 py-3.5 text-left shadow-sm hover:shadow-md hover:border-zinc-300 active:scale-[0.99] transition-all cursor-pointer ${
-                    urgent ? 'border-amber-200' : 'border-zinc-100'
-                  }`}>
+                  className={`w-full rounded-2xl border px-4 py-3.5 text-left shadow-sm hover:shadow-md active:scale-[0.99] transition-all cursor-pointer ${st.border} ${st.bg}`}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-zinc-900 text-sm">{item.name}</span>
-                    <div className="flex items-center gap-2">
-                      {urgent && <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium">Low stock</span>}
-                      <span className="text-sm font-bold text-zinc-900">{item.currentBalance?.toFixed(1) ?? '—'} <span className="text-xs font-normal text-zinc-400">{item.metric}</span></span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${st.dot}`} />
+                      <span className="font-medium text-zinc-900 text-sm truncate">{item.name}</span>
+                      {locName && <span className="text-[10px] text-zinc-400 shrink-0">{locName}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${st.badge}`}>
+                        {STATUS_LABEL[item.status]}
+                      </span>
+                      <span className="text-sm font-bold text-zinc-900">
+                        {item.currentBalance.toFixed(1)}
+                        <span className="text-xs font-normal text-zinc-400 ml-0.5">{item.metric}</span>
+                      </span>
                     </div>
                   </div>
                   {pct !== null && (
-                    <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${urgent ? 'bg-amber-400' : 'bg-[#3B6D11]'}`} style={{ width: `${pct}%` }} />
+                    <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden mb-1">
+                      <div className={`h-full rounded-full transition-all ${st.bar}`} style={{ width: `${pct}%` }} />
                     </div>
                   )}
-                  {item.parLevel && (
-                    <p className="text-[11px] text-zinc-400 mt-1">Par level: {item.parLevel} {item.metric}</p>
+                  {item.parLevel != null && (
+                    <p className="text-[11px] text-zinc-400">
+                      Par level: {item.parLevel} {item.metric}
+                    </p>
                   )}
                 </button>
               )
@@ -278,55 +463,99 @@ export default function InventoryPage() {
         </svg>
       </button>
 
-      {/* ── Item detail modal ──────────────────────────────────────────────── */}
+      {/* ── Item detail modal ──────────────────────────────────────────────────── */}
       <Modal open={!!selectedItem} onClose={() => setSelectedItem(null)} title={selectedItem?.name ?? ''}>
-        {selectedItem && (
-          <div className="space-y-4">
-            {/* Current balance */}
-            <div className="bg-[#3B6D11]/5 rounded-2xl p-4 text-center">
-              <p className="text-3xl font-bold text-[#3B6D11]">
-                {enrichedItems.find(i => i.id === selectedItem.id)?.currentBalance?.toFixed(1) ?? '—'}
-              </p>
-              <p className="text-sm text-zinc-500">{selectedItem.metric} current balance</p>
-            </div>
-
-            <div className="flex gap-2">
-              <button onClick={() => { setSelectedItem(null); openTx('in', selectedItem) }}
-                className="flex-1 bg-green-50 text-green-700 text-sm font-medium py-2.5 rounded-full cursor-pointer hover:bg-green-100 transition-colors">+ Receive</button>
-              <button onClick={() => { setSelectedItem(null); openTx('out', selectedItem) }}
-                className="flex-1 bg-red-50 text-red-600 text-sm font-medium py-2.5 rounded-full cursor-pointer hover:bg-red-100 transition-colors">− Use</button>
-              <button onClick={() => { setSelectedItem(null); openEditItem(selectedItem) }}
-                className="px-4 border border-zinc-200 text-zinc-600 text-sm py-2.5 rounded-full cursor-pointer hover:bg-zinc-50 transition-colors">Edit</button>
-            </div>
-
-            {/* Transaction log */}
-            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Transaction log</p>
-            {txWithBalance.length === 0 ? (
-              <p className="text-sm text-zinc-400 text-center py-6">No transactions yet.</p>
-            ) : (
-              <div className="space-y-1">
-                {txWithBalance.map(t => (
-                  <div key={t.id} className="flex items-center justify-between py-2 border-b border-zinc-50">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-medium ${t.quantityIn ? 'text-green-600' : 'text-red-600'}`}>
-                          {t.quantityIn ? `+${t.quantityIn}` : `-${t.quantityOut}`} {selectedItem.metric}
-                        </span>
-                        {t.description && <span className="text-xs text-zinc-500">{t.description}</span>}
-                      </div>
-                      <p className="text-[11px] text-zinc-400">{t.date}</p>
-                    </div>
-                    <span className="text-sm font-medium text-zinc-700">{t.balance.toFixed(1)}</span>
-                  </div>
-                ))}
+        {selectedItem && (() => {
+          const enriched = enrichedItems.find(i => i.id === selectedItem.id) ?? selectedItem
+          const st = STATUS_STYLES[enriched.status]
+          const locName = selectedItem.locationId
+            ? locations.find(l => l.id === selectedItem.locationId)?.name
+            : null
+          return (
+            <div className="space-y-4">
+              {/* Balance + meta */}
+              <div className={`rounded-2xl p-4 text-center border ${st.border} ${st.bg}`}>
+                <p className="text-3xl font-bold text-zinc-900">
+                  {enriched.currentBalance.toFixed(1)}
+                </p>
+                <p className="text-sm text-zinc-500 mt-0.5">{selectedItem.metric} current balance</p>
+                <div className="flex items-center justify-center gap-4 mt-2 text-xs text-zinc-500">
+                  {selectedItem.parLevel != null && (
+                    <span>Par level: <strong className="text-zinc-700">{selectedItem.parLevel} {selectedItem.metric}</strong></span>
+                  )}
+                  {locName && (
+                    <span>Location: <strong className="text-zinc-700">{locName}</strong></span>
+                  )}
+                </div>
+                <div className={`inline-block mt-2 text-xs px-3 py-0.5 rounded-full font-medium ${st.badge}`}>
+                  {STATUS_LABEL[enriched.status]}
+                </div>
               </div>
-            )}
-          </div>
-        )}
+
+              <div className="flex gap-2">
+                <button onClick={() => { setSelectedItem(null); openTx('in', selectedItem) }}
+                  className="flex-1 bg-green-50 text-green-700 text-sm font-medium py-2.5 rounded-full cursor-pointer hover:bg-green-100 transition-colors">
+                  + Receive
+                </button>
+                <button onClick={() => { setSelectedItem(null); openTx('out', selectedItem) }}
+                  className="flex-1 bg-red-50 text-red-600 text-sm font-medium py-2.5 rounded-full cursor-pointer hover:bg-red-100 transition-colors">
+                  − Use
+                </button>
+                <button onClick={() => { setSelectedItem(null); openEditItem(selectedItem) }}
+                  className="px-4 border border-zinc-200 text-zinc-600 text-sm py-2.5 rounded-full cursor-pointer hover:bg-zinc-50 transition-colors">
+                  Edit
+                </button>
+              </div>
+
+              {/* Average monthly usage chart */}
+              {avgUsageChart.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
+                    Monthly Usage ({selectedItem.metric})
+                  </p>
+                  <div style={{ height: 100 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={avgUsageChart} margin={{ top: 0, right: 4, bottom: 0, left: -20 }} barSize={14}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f4" vertical={false} />
+                        <XAxis dataKey="month" tick={{ fontSize: 9 }} />
+                        <YAxis tick={{ fontSize: 9 }} />
+                        <Tooltip />
+                        <Bar dataKey="total" fill="#3B6D11" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Transaction log */}
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Transaction log</p>
+              {txWithBalance.length === 0 ? (
+                <p className="text-sm text-zinc-400 text-center py-6">No transactions yet.</p>
+              ) : (
+                <div className="space-y-1">
+                  {txWithBalance.map(t => (
+                    <div key={t.id} className="flex items-center justify-between py-2 border-b border-zinc-50">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-medium ${t.quantityIn ? 'text-green-600' : 'text-red-600'}`}>
+                            {t.quantityIn ? `+${t.quantityIn}` : `-${t.quantityOut}`} {selectedItem.metric}
+                          </span>
+                          {t.description && <span className="text-xs text-zinc-500">{t.description}</span>}
+                        </div>
+                        <p className="text-[11px] text-zinc-400">{t.date}</p>
+                      </div>
+                      <span className="text-sm font-medium text-zinc-700">{t.balance.toFixed(1)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </Modal>
 
-      {/* ── Add/Edit item modal ────────────────────────────────────────────── */}
-      <Modal open={showItemForm} onClose={() => setShowItemForm(false)} title={editItemId ? 'Edit Item' : 'Add Inventory Item'}>
+      {/* ── Add/Edit item modal ────────────────────────────────────────────────── */}
+      <Modal open={showItemForm} onClose={() => setShowItemForm(false)} title={editItemId ? 'Edit Item' : 'Add Input Item'}>
         <form onSubmit={handleItemSubmit} className="space-y-4">
           <Field label="Item name">
             <input required value={itemForm.name} onChange={e => setItemForm({ ...itemForm, name: e.target.value })}
@@ -352,18 +581,20 @@ export default function InventoryPage() {
             </select>
           </Field>
           {itemError && <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{itemError}</p>}
-          <button type="submit" disabled={itemSubmitting}
-            className="w-full bg-[#3B6D11] text-white text-sm font-medium py-3 rounded-full hover:bg-[#2d5409] transition-colors disabled:opacity-50 cursor-pointer">
-            {itemSubmitting ? 'Saving…' : editItemId ? 'Save Changes' : 'Add Item'}
+          <button type="submit"
+            className="w-full bg-[#3B6D11] text-white text-sm font-medium py-3 rounded-full hover:bg-[#2d5409] transition-colors cursor-pointer">
+            {editItemId ? 'Save Changes' : 'Add Item'}
           </button>
           {editItemId && (
-            <button type="button" onClick={handleRemoveItem} disabled={itemSubmitting}
-              className="w-full text-red-500 text-sm py-2 rounded-full hover:bg-red-50 transition-colors cursor-pointer">Remove item</button>
+            <button type="button" onClick={handleRemoveItem}
+              className="w-full text-red-500 text-sm py-2 rounded-full hover:bg-red-50 transition-colors cursor-pointer">
+              Remove item
+            </button>
           )}
         </form>
       </Modal>
 
-      {/* ── Transaction modal ──────────────────────────────────────────────── */}
+      {/* ── Transaction modal ──────────────────────────────────────────────────── */}
       <Modal open={showTxForm} onClose={() => setShowTxForm(false)} title={txType === 'in' ? 'Record Stock In' : 'Record Stock Out'}>
         <form onSubmit={handleTxSubmit} className="space-y-4">
           <Field label="Item">
@@ -385,12 +616,11 @@ export default function InventoryPage() {
             <input value={txForm.description} onChange={e => setTxForm({ ...txForm, description: e.target.value })}
               placeholder="e.g. Monthly delivery" className={input} />
           </Field>
-          {txError && <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{txError}</p>}
-          <button type="submit" disabled={txSubmitting}
-            className={`w-full text-white text-sm font-medium py-3 rounded-full transition-colors disabled:opacity-50 cursor-pointer ${
+          <button type="submit"
+            className={`w-full text-white text-sm font-medium py-3 rounded-full transition-colors cursor-pointer ${
               txType === 'in' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-500 hover:bg-red-600'
             }`}>
-            {txSubmitting ? 'Saving…' : txType === 'in' ? 'Record Stock In' : 'Record Stock Out'}
+            {txType === 'in' ? 'Record Stock In' : 'Record Stock Out'}
           </button>
         </form>
       </Modal>
