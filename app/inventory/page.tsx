@@ -200,7 +200,7 @@ export default function InventoryPage() {
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-zinc-900">Inventory</h1>
+              <h1 className="text-xl font-bold tracking-tight text-zinc-900">Inputs</h1>
               <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#3B6D11]' : 'bg-zinc-400'}`} />
             </div>
             <p className="text-xs text-zinc-500 mt-0.5">Stock levels · In/Out log</p>

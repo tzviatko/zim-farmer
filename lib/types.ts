@@ -1,7 +1,7 @@
 // ── Livestock ─────────────────────────────────────────────────────────────────
 
 export type AnimalGender = 'M' | 'F'
-export type AnimalStatus = 'active' | 'sold' | 'lost' | 'in_calf' | 'deceased'
+export type AnimalStatus = 'active' | 'sold' | 'lost' | 'in_calf' | 'deceased' | 'sick'
 export type AnimalGroup = 'A' | 'B'
 export type AnimalOwner = 'Amaval' | 'Tsinda - Cornelia' | 'Tsinda - Other'
 

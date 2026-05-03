@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   collection, getDocs, addDoc, updateDoc, doc, query, where, Timestamp,
 } from 'firebase/firestore'
@@ -11,6 +11,11 @@ import {
   DipRecord, VaccinationRecord, WeightRecord, StatusChange,
   computeAnimalType, getDipStatus, DipStatus,
 } from '../../lib/types'
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  BarChart, Bar,
+} from 'recharts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -22,27 +27,31 @@ type EnrichedAnimal = Animal & {
   dipStatus: DipStatus
   lastWeightKg: number | null
   hasOffspring: boolean
-  // sub-records loaded lazily when opening detail
   dips?: DipRecord[]
   vaccinations?: VaccinationRecord[]
   weights?: WeightRecord[]
   statusChanges?: StatusChange[]
 }
 
-type Tab = 'all' | 'active' | 'in_calf' | 'bull' | 'cow' | 'young'
+const ARCHIVED_STATUSES: AnimalStatus[] = ['sold', 'lost', 'deceased']
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'all',     label: 'All' },
-  { key: 'active',  label: 'Active' },
-  { key: 'in_calf', label: 'In Calf' },
-  { key: 'bull',    label: 'Bulls' },
-  { key: 'cow',     label: 'Cows' },
-  { key: 'young',   label: 'Young' },
-]
+const STATUS_LABEL: Record<AnimalStatus, string> = {
+  active: 'Active',
+  in_calf: 'In Calf',
+  sick: 'Sick',
+  sold: 'Sold',
+  lost: 'Lost',
+  deceased: 'Deceased',
+}
 
-const STATUS_OPTS: AnimalStatus[] = ['active', 'sold', 'lost', 'deceased']
-const OWNER_OPTS: AnimalOwner[] = ['Amaval', 'Tsinda - Cornelia', 'Tsinda - Other']
-const GROUP_OPTS: AnimalGroup[] = ['A', 'B']
+const STATUS_CLASS: Record<AnimalStatus, string> = {
+  active:   'bg-green-50 text-green-700',
+  in_calf:  'bg-blue-50 text-blue-700',
+  sick:     'bg-orange-50 text-orange-700',
+  sold:     'bg-zinc-100 text-zinc-500',
+  lost:     'bg-amber-50 text-amber-700',
+  deceased: 'bg-red-50 text-red-600',
+}
 
 const DIP_LABEL: Record<DipStatus, string> = { ok: 'Dipped', due: 'Due soon', overdue: 'Overdue' }
 const DIP_CLASS: Record<DipStatus, string> = {
@@ -50,27 +59,21 @@ const DIP_CLASS: Record<DipStatus, string> = {
   due:     'bg-amber-50 text-amber-700',
   overdue: 'bg-red-50 text-red-600',
 }
-const STATUS_CLASS: Record<AnimalStatus, string> = {
-  active:   'bg-green-50 text-green-700',
-  in_calf:  'bg-blue-50 text-blue-700',
-  sold:     'bg-zinc-100 text-zinc-500',
-  lost:     'bg-orange-50 text-orange-700',
-  deceased: 'bg-red-50 text-red-600',
-}
+
+const OWNER_OPTS: AnimalOwner[] = ['Amaval', 'Tsinda - Cornelia', 'Tsinda - Other']
+const GROUP_OPTS: AnimalGroup[] = ['A', 'B']
+const PIE_COLORS = ['#3B6D11','#6aaa2a','#a3d977','#c9e9a0','#e8f5d0','#1a3d06','#92c25d','#d4edaa']
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function mapDoc(id: string, d: Record<string, unknown>): Animal {
-  // Support old schema (sex: cow/bull/heifer/steer) and new schema (gender: M/F)
   let gender = d.gender as AnimalGender | undefined
   let isBull = d.isBull as boolean | undefined
-
   if (!gender) {
     const sex = d.sex as string | undefined
     gender = sex === 'bull' || sex === 'steer' ? 'M' : 'F'
     isBull = sex === 'bull'
   }
-
   return {
     id,
     tag: String(d.tag ?? ''),
@@ -94,14 +97,48 @@ function fmt(tag: string): string {
   return (digits || '0').padStart(4, '0').slice(-4)
 }
 
+function today() { return new Date().toISOString().slice(0, 10) }
+
+function fmtAge(years: number | null): string {
+  if (years === null) return ''
+  if (years < 1) return `${Math.round(years * 12)}mo`
+  return `${years.toFixed(1)}y`
+}
+
+const input = 'w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20 bg-white'
+const sel = input
+
+function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-zinc-800 mb-1.5">
+        {label}{required && <span className="text-red-400 ml-0.5">*</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-zinc-50">
+      <span className="text-xs text-zinc-500">{label}</span>
+      <span className="text-sm text-zinc-900">{value}</span>
+    </div>
+  )
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function LivestockPage() {
-  const [animals, setAnimals] = useState<EnrichedAnimal[]>([])
+  const [allAnimals, setAllAnimals] = useState<EnrichedAnimal[]>([]) // includes archived
   const [paddocks, setPaddocks] = useState<Paddock[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<Tab>('all')
+  const [statFilter, setStatFilter] = useState<AnimalStatus | null>(null)
+  const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [showArchive, setShowArchive] = useState(false)
+  const [showCharts, setShowCharts] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
 
   // Add/edit modal
@@ -116,12 +153,14 @@ export default function LivestockPage() {
   const [birthGender, setBirthGender] = useState<'M' | 'F'>('F')
   const [birthDate, setBirthDate] = useState(today())
 
-  // Detail / health modals
+  // Detail modal
   const [detailAnimal, setDetailAnimal] = useState<EnrichedAnimal | null>(null)
-  const [detailTab, setDetailTab] = useState<'info' | 'health' | 'history'>('info')
-  const [showDipForm, setShowDipForm] = useState(false)
-  const [showVaccForm, setShowVaccForm] = useState(false)
-  const [showWeightForm, setShowWeightForm] = useState(false)
+  const [detailTab, setDetailTab] = useState<'info' | 'history' | 'dips' | 'weights' | 'vaccinations'>('info')
+
+  // Record modals (top-level, opened from detail header)
+  const [showDipModal, setShowDipModal] = useState(false)
+  const [showVaccModal, setShowVaccModal] = useState(false)
+  const [showWeightModal, setShowWeightModal] = useState(false)
   const [dipDate, setDipDate] = useState(today())
   const [vaccDate, setVaccDate] = useState(today())
   const [vaccType, setVaccType] = useState('')
@@ -133,6 +172,18 @@ export default function LivestockPage() {
   const [showBatchDip, setShowBatchDip] = useState(false)
   const [batchDipDate, setBatchDipDate] = useState(today())
   const [batchDipTags, setBatchDipTags] = useState<Set<string>>(new Set())
+
+  // Batch vaccination
+  const [showBatchVacc, setShowBatchVacc] = useState(false)
+  const [batchVaccDate, setBatchVaccDate] = useState(today())
+  const [batchVaccType, setBatchVaccType] = useState('')
+  const [batchVaccineUsed, setBatchVaccineUsed] = useState('')
+  const [batchVaccTags, setBatchVaccTags] = useState<Set<string>>(new Set())
+
+  // Batch weight
+  const [showBatchWeight, setShowBatchWeight] = useState(false)
+  const [batchWeightDate, setBatchWeightDate] = useState(today())
+  const [batchWeights, setBatchWeights] = useState<Map<string, string>>(new Map())
 
   useEffect(() => {
     setIsOnline(navigator.onLine)
@@ -158,7 +209,6 @@ export default function LivestockPage() {
         .sort((a, b) => a.name.localeCompare(b.name))
       setPaddocks(paddockList)
 
-      // Index dip dates per animal
       const lastDipMap = new Map<string, string>()
       dipSnap.docs.forEach(d => {
         const data = d.data()
@@ -167,7 +217,6 @@ export default function LivestockPage() {
         if (!lastDipMap.has(aid) || date > lastDipMap.get(aid)!) lastDipMap.set(aid, date)
       })
 
-      // Index last weight per animal
       const lastWeightMap = new Map<string, number>()
       weightSnap.docs.forEach(d => {
         const data = d.data()
@@ -176,8 +225,6 @@ export default function LivestockPage() {
       })
 
       const rawAnimals = cattleSnap.docs.map(d => mapDoc(d.id, d.data() as Record<string, unknown>))
-
-      // Build offspring set
       const offspringParents = new Set(rawAnimals.map(a => a.motherId).filter(Boolean) as string[])
 
       const enriched: EnrichedAnimal[] = rawAnimals.map(a => {
@@ -198,7 +245,7 @@ export default function LivestockPage() {
       })
 
       enriched.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      setAnimals(enriched)
+      setAllAnimals(enriched)
     } catch (err) {
       console.error('fetchAll failed:', err)
     } finally {
@@ -212,31 +259,106 @@ export default function LivestockPage() {
   async function openDetail(animal: EnrichedAnimal) {
     setDetailAnimal(animal)
     setDetailTab('info')
+    setShowBirthForm(false)
     const [dipSnap, vaccSnap, weightSnap, statusSnap] = await Promise.all([
       getDocs(query(collection(db, 'dip_records'), where('animalId', '==', animal.id))),
       getDocs(query(collection(db, 'vaccination_records'), where('animalId', '==', animal.id))),
       getDocs(query(collection(db, 'weight_records'), where('animalId', '==', animal.id))),
       getDocs(query(collection(db, 'status_changes'), where('animalId', '==', animal.id))),
     ])
-    const withRecords: EnrichedAnimal = {
+    setDetailAnimal({
       ...animal,
-      dips: dipSnap.docs.map(d => ({ id: d.id, animalId: animal.id, date: d.data().date as string, sessionId: null })).sort((a,b) => b.date.localeCompare(a.date)),
-      vaccinations: vaccSnap.docs.map(d => ({ id: d.id, animalId: animal.id, date: d.data().date as string, type: d.data().type as string, vaccineUsed: d.data().vaccineUsed as string | null })).sort((a,b) => b.date.localeCompare(a.date)),
-      weights: weightSnap.docs.map(d => ({ id: d.id, animalId: animal.id, date: d.data().date as string, weightKg: d.data().weightKg as number })).sort((a,b) => b.date.localeCompare(a.date)),
-      statusChanges: statusSnap.docs.map(d => ({ id: d.id, animalId: animal.id, date: d.data().date as string, fromStatus: d.data().fromStatus as AnimalStatus | null, toStatus: d.data().toStatus as AnimalStatus, notes: d.data().notes as string | null })).sort((a,b) => b.date.localeCompare(a.date)),
-    }
-    setDetailAnimal(withRecords)
+      dips: dipSnap.docs.map(d => ({
+        id: d.id, animalId: animal.id,
+        date: d.data().date as string,
+        sessionId: d.data().sessionId as string | null ?? null,
+      })).sort((a, b) => b.date.localeCompare(a.date)),
+      vaccinations: vaccSnap.docs.map(d => ({
+        id: d.id, animalId: animal.id,
+        date: d.data().date as string,
+        type: d.data().type as string,
+        vaccineUsed: d.data().vaccineUsed as string | null ?? null,
+      })).sort((a, b) => b.date.localeCompare(a.date)),
+      weights: weightSnap.docs.map(d => ({
+        id: d.id, animalId: animal.id,
+        date: d.data().date as string,
+        weightKg: d.data().weightKg as number,
+      })).sort((a, b) => a.date.localeCompare(b.date)), // ascending for chart
+      statusChanges: statusSnap.docs.map(d => ({
+        id: d.id, animalId: animal.id,
+        date: d.data().date as string,
+        fromStatus: d.data().fromStatus as AnimalStatus | null ?? null,
+        toStatus: d.data().toStatus as AnimalStatus,
+        notes: d.data().notes as string | null ?? null,
+      })).sort((a, b) => b.date.localeCompare(a.date)),
+    })
   }
 
-  // ── Filters ────────────────────────────────────────────────────────────────
+  // ── Derived data ───────────────────────────────────────────────────────────
+
+  const activeAnimals = useMemo(() =>
+    allAnimals.filter(a => !ARCHIVED_STATUSES.includes(a.status)),
+    [allAnimals])
+
+  const archivedAnimals = useMemo(() =>
+    allAnimals.filter(a => ARCHIVED_STATUSES.includes(a.status)),
+    [allAnimals])
+
+  const stats = useMemo(() => ({
+    total: activeAnimals.length,
+    active: activeAnimals.filter(a => a.status === 'active').length,
+    inCalf: activeAnimals.filter(a => a.status === 'in_calf').length,
+    sick: activeAnimals.filter(a => a.status === 'sick').length,
+  }), [activeAnimals])
+
+  // Pie chart data — type breakdown of active animals
+  const pieData = useMemo(() => {
+    const map = new Map<string, number>()
+    activeAnimals.forEach(a => map.set(a.type, (map.get(a.type) ?? 0) + 1))
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
+  }, [activeAnimals])
+
+  // Analytics charts data
+  const groupData = useMemo(() => {
+    const map = new Map<string, number>()
+    activeAnimals.forEach(a => {
+      const g = a.group ? `Group ${a.group}` : 'None'
+      map.set(g, (map.get(g) ?? 0) + 1)
+    })
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
+  }, [activeAnimals])
+
+  const locationData = useMemo(() => {
+    const map = new Map<string, number>()
+    activeAnimals.forEach(a => {
+      const loc = paddocks.find(p => p.id === a.paddockId)?.name ?? 'Unknown'
+      map.set(loc, (map.get(loc) ?? 0) + 1)
+    })
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
+  }, [activeAnimals, paddocks])
+
+  const breedData = useMemo(() => {
+    const map = new Map<string, number>()
+    activeAnimals.forEach(a => {
+      const b = a.breed ?? 'Unknown'
+      map.set(b, (map.get(b) ?? 0) + 1)
+    })
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
+  }, [activeAnimals])
+
+  const ownerData = useMemo(() => {
+    const map = new Map<string, number>()
+    activeAnimals.forEach(a => {
+      const o = a.owner ?? 'Unknown'
+      map.set(o, (map.get(o) ?? 0) + 1)
+    })
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
+  }, [activeAnimals])
 
   const filtered = useMemo(() => {
-    let list = animals
-    if (tab === 'active') list = list.filter(a => a.status === 'active')
-    else if (tab === 'in_calf') list = list.filter(a => a.status === 'in_calf')
-    else if (tab === 'bull') list = list.filter(a => a.isBull)
-    else if (tab === 'cow') list = list.filter(a => a.type === 'Cow')
-    else if (tab === 'young') list = list.filter(a => ['Calf', 'Weaner steer', 'Steer', 'Weaner heifer', 'Heifer'].includes(a.type))
+    let list = activeAnimals
+    if (statFilter) list = list.filter(a => a.status === statFilter)
+    if (typeFilter) list = list.filter(a => a.type === typeFilter)
     if (search) {
       const q = search.toLowerCase()
       list = list.filter(a =>
@@ -246,33 +368,22 @@ export default function LivestockPage() {
       )
     }
     return list
-  }, [animals, tab, search])
-
-  const stats = useMemo(() => ({
-    total: animals.length,
-    active: animals.filter(a => a.status === 'active').length,
-    inCalf: animals.filter(a => a.status === 'in_calf').length,
-    male: animals.filter(a => a.gender === 'M').length,
-    female: animals.filter(a => a.gender === 'F').length,
-  }), [animals])
+  }, [activeAnimals, statFilter, typeFilter, search])
 
   // ── Form handlers ──────────────────────────────────────────────────────────
 
   function openAdd() {
-    setForm(emptyForm())
-    setEditId(null)
-    setFormError(null)
-    setShowForm(true)
+    setForm(emptyForm()); setEditId(null); setFormError(null); setShowForm(true)
   }
 
   function openEdit(a: EnrichedAnimal) {
-    const isInCalfFemale = a.gender === 'F' && a.status === 'in_calf'
     setForm({
       tag: fmt(a.tag),
       gender: a.gender,
       isBull: a.isBull,
       dob: a.dob ?? '',
-      status: isInCalfFemale ? 'active' : a.status,
+      status: a.status === 'in_calf' ? 'active' : a.status,
+      inCalf: a.status === 'in_calf',
       group: a.group ?? '',
       motherId: a.motherId ?? '',
       owner: a.owner ?? '',
@@ -280,20 +391,16 @@ export default function LivestockPage() {
       paddockId: a.paddockId ?? '',
       notes: a.notes ?? '',
     })
-    setEditId(a.id)
-    setFormError(null)
-    setShowForm(true)
+    setEditId(a.id); setFormError(null); setShowForm(true)
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const inCalf = form.gender === 'F' && form.status === 'in_calf'
+    const status: AnimalStatus = (form.gender === 'F' && form.inCalf) ? 'in_calf' : form.status as AnimalStatus
     const payload = {
-      tag: form.tag,
-      gender: form.gender,
+      tag: form.tag, gender: form.gender,
       isBull: form.gender === 'M' && form.isBull,
-      dob: form.dob || null,
-      status: inCalf ? 'in_calf' : form.status,
+      dob: form.dob || null, status,
       group: form.group || null,
       motherId: form.motherId || null,
       owner: form.owner || null,
@@ -318,72 +425,98 @@ export default function LivestockPage() {
     fetchAll(true)
   }
 
+  function changeStatus(animal: EnrichedAnimal, s: AnimalStatus) {
+    updateDoc(doc(db, 'cattle', animal.id), { status: s }).catch(console.error)
+    addDoc(collection(db, 'status_changes'), {
+      animalId: animal.id,
+      date: today(),
+      fromStatus: animal.status,
+      toStatus: s,
+      notes: null,
+      createdAt: Timestamp.now().toDate().toISOString(),
+    }).catch(console.error)
+    const updated = { ...animal, status: s }
+    setDetailAnimal(updated)
+    setAllAnimals(prev => prev.map(a => a.id === animal.id ? { ...a, status: s } : a))
+  }
+
   // ── Health record handlers ─────────────────────────────────────────────────
 
-  function recordDip() {
-    if (!detailAnimal) return
+  function recordDip(animalId: string, date: string, cb?: () => void) {
     addDoc(collection(db, 'dip_records'), {
-      animalId: detailAnimal.id,
-      date: dipDate,
-      sessionId: null,
+      animalId, date, sessionId: null,
       createdAt: Timestamp.now().toDate().toISOString(),
     }).catch(console.error)
-    setShowDipForm(false)
-    openDetail({ ...detailAnimal, lastDipDate: dipDate, dipStatus: getDipStatus(dipDate) })
     fetchAll(true)
+    cb?.()
   }
 
-  function recordVaccination() {
-    if (!detailAnimal || !vaccType) return
+  function recordVacc(animalId: string, date: string, type: string, vaccine: string, cb?: () => void) {
+    if (!type) return
     addDoc(collection(db, 'vaccination_records'), {
-      animalId: detailAnimal.id,
-      date: vaccDate,
-      type: vaccType,
-      vaccineUsed: vaccineUsed || null,
+      animalId, date, type, vaccineUsed: vaccine || null,
       createdAt: Timestamp.now().toDate().toISOString(),
     }).catch(console.error)
-    setShowVaccForm(false)
-    setVaccType('')
-    setVaccineUsed('')
-    openDetail(detailAnimal)
+    cb?.()
   }
 
-  function recordWeight() {
-    if (!detailAnimal || !weightKg) return
-    const kg = parseFloat(weightKg)
-    if (isNaN(kg)) return
+  function recordWeight(animalId: string, date: string, kg: string, cb?: () => void) {
+    const n = parseFloat(kg)
+    if (isNaN(n)) return
     addDoc(collection(db, 'weight_records'), {
-      animalId: detailAnimal.id,
-      date: weightDate,
-      weightKg: kg,
+      animalId, date, weightKg: n,
       createdAt: Timestamp.now().toDate().toISOString(),
     }).catch(console.error)
-    setShowWeightForm(false)
-    setWeightKg('')
-    openDetail(detailAnimal)
     fetchAll(true)
+    cb?.()
   }
 
-  // ── Batch dip ──────────────────────────────────────────────────────────────
+  // ── Batch handlers ─────────────────────────────────────────────────────────
 
   function submitBatchDip() {
     if (!batchDipTags.size) return
     const sessionId = `session_${Date.now()}`
-    const targets = animals.filter(a => batchDipTags.has(a.id))
-    targets.forEach(a =>
+    allAnimals.filter(a => batchDipTags.has(a.id)).forEach(a =>
       addDoc(collection(db, 'dip_records'), {
-        animalId: a.id,
-        date: batchDipDate,
-        sessionId,
+        animalId: a.id, date: batchDipDate, sessionId,
         createdAt: Timestamp.now().toDate().toISOString(),
       }).catch(console.error)
     )
-    setShowBatchDip(false)
-    setBatchDipTags(new Set())
-    fetchAll(true)
+    setShowBatchDip(false); setBatchDipTags(new Set()); fetchAll(true)
+  }
+
+  function submitBatchVacc() {
+    if (!batchVaccTags.size || !batchVaccType) return
+    allAnimals.filter(a => batchVaccTags.has(a.id)).forEach(a =>
+      addDoc(collection(db, 'vaccination_records'), {
+        animalId: a.id, date: batchVaccDate, type: batchVaccType,
+        vaccineUsed: batchVaccineUsed || null,
+        createdAt: Timestamp.now().toDate().toISOString(),
+      }).catch(console.error)
+    )
+    setShowBatchVacc(false); setBatchVaccTags(new Set()); setBatchVaccType(''); setBatchVaccineUsed('')
+  }
+
+  function submitBatchWeight() {
+    const eligible = allAnimals.filter(a => a.status === 'active' || a.status === 'in_calf' || a.status === 'sick')
+    eligible.forEach(a => {
+      const kg = batchWeights.get(a.id)
+      if (kg) recordWeight(a.id, batchWeightDate, kg)
+    })
+    setShowBatchWeight(false); setBatchWeights(new Map())
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  const eligibleForBatch = allAnimals.filter(a => a.status === 'active' || a.status === 'in_calf' || a.status === 'sick')
+
+  // Female status options depend on age
+  function femaleStatusOpts(animal: EnrichedAnimal | null): AnimalStatus[] {
+    if (!animal) return ['active', 'in_calf', 'sick', 'sold', 'lost', 'deceased']
+    const isUnderOneYear = animal.ageYears !== null && animal.ageYears < 1
+    if (isUnderOneYear) return ['active', 'sick', 'sold', 'lost', 'deceased']
+    return ['active', 'in_calf', 'sick', 'sold', 'lost', 'deceased']
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F0] font-[family-name:var(--font-syne)] pb-[100px]">
@@ -398,10 +531,6 @@ export default function LivestockPage() {
             </div>
             <p className="text-xs text-zinc-500 mt-0.5">Animals · Health · Records</p>
           </div>
-          <button onClick={() => setShowBatchDip(true)}
-            className="text-xs bg-[#3B6D11]/10 text-[#3B6D11] px-3 py-1.5 rounded-full font-medium hover:bg-[#3B6D11]/20 transition-colors cursor-pointer">
-            Record Dip
-          </button>
         </div>
       </header>
 
@@ -413,19 +542,105 @@ export default function LivestockPage() {
 
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
 
-        {/* Stats row */}
+        {/* Stats row — interactive */}
         <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: 'Total', value: stats.total },
-            { label: 'Active', value: stats.active },
-            { label: 'In Calf', value: stats.inCalf },
-            { label: 'Female', value: stats.female },
-          ].map(s => (
-            <div key={s.label} className="bg-white rounded-xl border border-zinc-100 p-3 shadow-sm text-center">
-              <p className="text-lg font-bold text-zinc-900">{loading ? '—' : s.value}</p>
-              <p className="text-[10px] text-zinc-400 uppercase tracking-wide">{s.label}</p>
-            </div>
+          {([
+            { label: 'Total',   value: stats.total,   filter: null },
+            { label: 'Active',  value: stats.active,  filter: 'active' as AnimalStatus },
+            { label: 'In Calf', value: stats.inCalf,  filter: 'in_calf' as AnimalStatus },
+            { label: 'Sick',    value: stats.sick,    filter: 'sick' as AnimalStatus },
+          ]).map(s => (
+            <button key={s.label}
+              onClick={() => setStatFilter(prev => prev === s.filter ? null : s.filter)}
+              className={`rounded-xl border p-3 shadow-sm text-center transition-all cursor-pointer ${
+                statFilter === s.filter
+                  ? 'bg-[#3B6D11] border-[#3B6D11] text-white'
+                  : 'bg-white border-zinc-100 text-zinc-900'
+              }`}>
+              <p className="text-lg font-bold">{loading ? '—' : s.value}</p>
+              <p className={`text-[10px] uppercase tracking-wide ${statFilter === s.filter ? 'text-white/70' : 'text-zinc-400'}`}>{s.label}</p>
+            </button>
           ))}
+        </div>
+
+        {/* Pie chart — interactive type filter */}
+        {!loading && activeAnimals.length > 0 && (
+          <div className="bg-white rounded-2xl border border-zinc-100 p-4 shadow-sm">
+            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-3">By Type</p>
+            <div className="flex items-center gap-4">
+              <div style={{ width: 130, height: 130 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie dataKey="value" data={pieData} cx="50%" cy="50%" outerRadius={55}
+                      onClick={(entry) => setTypeFilter(prev => prev === entry.name ? null : entry.name as string)}>
+                      {pieData.map((entry, i) => (
+                        <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]}
+                          opacity={typeFilter && typeFilter !== entry.name ? 0.3 : 1} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex-1 space-y-1.5">
+                {pieData.map((entry, i) => (
+                  <button key={entry.name}
+                    onClick={() => setTypeFilter(prev => prev === entry.name ? null : entry.name)}
+                    className={`flex items-center gap-2 w-full text-left rounded-lg px-2 py-1 transition-colors cursor-pointer ${
+                      typeFilter === entry.name ? 'bg-zinc-100' : 'hover:bg-zinc-50'
+                    }`}>
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    <span className="text-xs text-zinc-700 flex-1">{entry.name}</span>
+                    <span className="text-xs font-medium text-zinc-900">{entry.value}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {typeFilter && (
+              <button onClick={() => setTypeFilter(null)}
+                className="mt-2 text-xs text-zinc-400 underline w-full text-center cursor-pointer">
+                Clear filter
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Analytics charts — collapsible */}
+        {!loading && activeAnimals.length > 0 && (
+          <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
+            <button onClick={() => setShowCharts(p => !p)}
+              className="w-full flex items-center justify-between px-4 py-3 cursor-pointer">
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Analytics</p>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                className={`text-zinc-400 transition-transform ${showCharts ? 'rotate-180' : ''}`}>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            {showCharts && (
+              <div className="px-4 pb-4 space-y-5 border-t border-zinc-50">
+                <MiniBarChart title="By Group" data={groupData} />
+                <MiniBarChart title="By Location" data={locationData} />
+                <MiniBarChart title="By Breed" data={breedData} />
+                <MiniBarChart title="By Owner" data={ownerData} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          <button onClick={() => setShowBatchDip(true)}
+            className="flex-1 text-xs bg-[#3B6D11]/10 text-[#3B6D11] px-3 py-2 rounded-full font-medium hover:bg-[#3B6D11]/20 transition-colors cursor-pointer">
+            Record Dip
+          </button>
+          <button onClick={() => setShowBatchVacc(true)}
+            className="flex-1 text-xs bg-blue-50 text-blue-700 px-3 py-2 rounded-full font-medium hover:bg-blue-100 transition-colors cursor-pointer">
+            Record Vaccination
+          </button>
+          <button onClick={() => setShowBatchWeight(true)}
+            className="flex-1 text-xs bg-purple-50 text-purple-700 px-3 py-2 rounded-full font-medium hover:bg-purple-100 transition-colors cursor-pointer">
+            Record Weight
+          </button>
         </div>
 
         {/* Search */}
@@ -439,18 +654,6 @@ export default function LivestockPage() {
             className="w-full bg-white border border-zinc-100 rounded-2xl pl-9 pr-4 py-3 text-sm text-zinc-700 placeholder:text-zinc-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20" />
         </div>
 
-        {/* Tab chips */}
-        <div className="flex gap-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`rounded-full px-4 py-1.5 text-sm whitespace-nowrap border transition-colors cursor-pointer ${
-                tab === t.key ? 'bg-[#3B6D11] text-white border-[#3B6D11]' : 'bg-white text-zinc-500 border-zinc-200'
-              }`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-
         {/* Animal list */}
         <div className="space-y-2">
           {loading ? (
@@ -459,7 +662,7 @@ export default function LivestockPage() {
             ))
           ) : filtered.length === 0 ? (
             <p className="text-center text-zinc-400 text-sm py-16">
-              {animals.length === 0 ? 'No animals recorded yet.' : 'No results.'}
+              {activeAnimals.length === 0 ? 'No animals recorded yet.' : 'No results.'}
             </p>
           ) : filtered.map(a => (
             <button key={a.id} onClick={() => openDetail(a)}
@@ -471,11 +674,11 @@ export default function LivestockPage() {
                   </span>
                   <span className="text-xs text-zinc-500">{a.type}</span>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_CLASS[a.status]}`}>
-                    {a.status.replace('_', ' ')}
+                    {STATUS_LABEL[a.status]}
                   </span>
                 </div>
                 <p className="text-xs text-zinc-500 mt-0.5 truncate">
-                  {[a.breed, a.group ? `Group ${a.group}` : null, a.ageYears ? `${a.ageYears.toFixed(1)}y` : null, a.lastWeightKg ? `${a.lastWeightKg}kg` : null].filter(Boolean).join(' · ')}
+                  {[a.breed, a.group ? `Group ${a.group}` : null, a.ageYears ? fmtAge(a.ageYears) : null, a.lastWeightKg ? `${a.lastWeightKg}kg` : null].filter(Boolean).join(' · ')}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -489,6 +692,45 @@ export default function LivestockPage() {
             </button>
           ))}
         </div>
+
+        {/* Archive toggle */}
+        {!loading && archivedAnimals.length > 0 && (
+          <div className="text-center py-2">
+            <button onClick={() => setShowArchive(p => !p)}
+              className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer">
+              {showArchive ? 'Hide archive' : `Archive (${archivedAnimals.length})`}
+            </button>
+          </div>
+        )}
+
+        {/* Archived animals */}
+        {showArchive && archivedAnimals.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide px-1">Archived</p>
+            {archivedAnimals.map(a => (
+              <button key={a.id} onClick={() => openDetail(a)}
+                className="w-full bg-zinc-50 rounded-2xl border border-zinc-200 px-4 py-3 flex items-center justify-between text-left cursor-pointer opacity-70 hover:opacity-100 transition-all">
+                <div className="min-w-0 mr-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-zinc-600 font-[family-name:var(--font-dm-mono)]">
+                      {fmt(a.tag)}
+                    </span>
+                    <span className="text-xs text-zinc-400">{a.type}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_CLASS[a.status]}`}>
+                      {STATUS_LABEL[a.status]}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-0.5 truncate">
+                    {[a.breed, a.group ? `Group ${a.group}` : null, a.ageYears ? fmtAge(a.ageYears) : null].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-300">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* FAB */}
@@ -499,113 +741,169 @@ export default function LivestockPage() {
         </svg>
       </button>
 
-      {/* ── Animal detail modal ───────────────────────────────────────────── */}
-      <Modal open={!!detailAnimal} onClose={() => { setDetailAnimal(null); setShowBirthForm(false) }} title={detailAnimal ? `Tag ${fmt(detailAnimal.tag)}` : ''} minContentHeight="380px">
+      {/* ── Animal detail modal ──────────────────────────────────────────────── */}
+      <Modal open={!!detailAnimal} onClose={() => { setDetailAnimal(null); setShowBirthForm(false) }}
+        title={detailAnimal ? `Tag ${fmt(detailAnimal.tag)}` : ''} minContentHeight="380px">
         {detailAnimal && (
-          <div className="space-y-4">
+          <div className="space-y-3">
+
+            {/* Quick-record buttons at top */}
+            <div className="flex gap-2">
+              <button onClick={() => { setDipDate(today()); setShowDipModal(true) }}
+                className="flex-1 text-xs bg-[#3B6D11]/10 text-[#3B6D11] py-2 rounded-full font-medium cursor-pointer hover:bg-[#3B6D11]/20 transition-colors">
+                Dip
+              </button>
+              <button onClick={() => { setWeightDate(today()); setWeightKg(''); setShowWeightModal(true) }}
+                className="flex-1 text-xs bg-purple-50 text-purple-700 py-2 rounded-full font-medium cursor-pointer hover:bg-purple-100 transition-colors">
+                Weight
+              </button>
+              <button onClick={() => { setVaccDate(today()); setVaccType(''); setVaccineUsed(''); setShowVaccModal(true) }}
+                className="flex-1 text-xs bg-blue-50 text-blue-700 py-2 rounded-full font-medium cursor-pointer hover:bg-blue-100 transition-colors">
+                Vaccination
+              </button>
+              {detailAnimal.status === 'in_calf' && (
+                <button onClick={() => setShowBirthForm(true)}
+                  className="flex-1 text-xs bg-pink-50 text-pink-700 py-2 rounded-full font-medium cursor-pointer hover:bg-pink-100 transition-colors">
+                  Birth
+                </button>
+              )}
+            </div>
+
             {/* Tabs */}
-            <div className="flex bg-zinc-100 rounded-full p-0.5">
-              {(['info', 'health', 'history'] as const).map(t => (
+            <div className="flex bg-zinc-100 rounded-full p-0.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+              {(['info', 'history', 'dips', 'weights', 'vaccinations'] as const).map(t => (
                 <button key={t} onClick={() => setDetailTab(t)}
-                  className={`flex-1 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer capitalize ${
+                  className={`flex-1 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer capitalize whitespace-nowrap px-2 ${
                     detailTab === t ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
                   }`}>{t}</button>
               ))}
             </div>
 
+            {/* ── Info tab ── */}
             {detailTab === 'info' && (
               <div className="space-y-3">
+                <InfoRow label="Tag" value={
+                  <span className="font-[family-name:var(--font-dm-mono)]">{fmt(detailAnimal.tag)}</span>
+                } />
                 <InfoRow label="Type" value={detailAnimal.type} />
                 <InfoRow label="Gender" value={detailAnimal.gender === 'M' ? 'Male' : 'Female'} />
+                {detailAnimal.ageYears != null && <InfoRow label="Age" value={`${detailAnimal.ageYears.toFixed(1)} years`} />}
+                {detailAnimal.dob && <InfoRow label="Date of Birth" value={detailAnimal.dob} />}
+                {detailAnimal.breed && <InfoRow label="Breed" value={detailAnimal.breed} />}
+                {detailAnimal.group && <InfoRow label="Group" value={`Group ${detailAnimal.group}`} />}
+                {detailAnimal.owner && <InfoRow label="Owner" value={detailAnimal.owner} />}
+                {detailAnimal.paddockId && <InfoRow label="Location" value={paddocks.find(p => p.id === detailAnimal.paddockId)?.name ?? detailAnimal.paddockId} />}
+                {detailAnimal.lastWeightKg && <InfoRow label="Last Weight" value={`${detailAnimal.lastWeightKg} kg`} />}
+                {detailAnimal.notes && <InfoRow label="Notes" value={detailAnimal.notes} />}
+
                 {/* Status pills */}
-                <div className="flex items-center justify-between py-2 border-b border-zinc-50">
-                  <span className="text-xs text-zinc-500">Status</span>
-                  <div className="flex flex-wrap gap-1.5 justify-end">
+                <div className="flex items-start justify-between py-2 border-b border-zinc-50">
+                  <span className="text-xs text-zinc-500 mt-1">Status</span>
+                  <div className="flex flex-wrap gap-1.5 justify-end max-w-[220px]">
                     {(detailAnimal.gender === 'M'
-                      ? ['active', 'sold', 'lost', 'deceased'] as AnimalStatus[]
-                      : ['active', 'in_calf', 'sold', 'lost', 'deceased'] as AnimalStatus[]
+                      ? ['active', 'sick', 'sold', 'lost', 'deceased'] as AnimalStatus[]
+                      : femaleStatusOpts(detailAnimal)
                     ).map(s => (
-                      <button key={s}
-                        onClick={() => {
-                          updateDoc(doc(db, 'cattle', detailAnimal.id), { status: s }).catch(console.error)
-                          const updated = { ...detailAnimal, status: s }
-                          setDetailAnimal(updated)
-                          setAnimals(prev => prev.map(a => a.id === detailAnimal.id ? { ...a, status: s } : a))
-                        }}
+                      <button key={s} onClick={() => changeStatus(detailAnimal, s)}
                         className={`text-xs px-2.5 py-1 rounded-full cursor-pointer transition-colors ${
                           detailAnimal.status === s
                             ? 'bg-[#3B6D11] text-white'
                             : 'border border-zinc-200 text-zinc-600 hover:bg-zinc-50'
                         }`}>
-                        {s.replace('_', ' ')}
+                        {STATUS_LABEL[s]}
                       </button>
                     ))}
                   </div>
                 </div>
-                {/* Record Birth button + inline form */}
-                {detailAnimal.status === 'in_calf' && (
-                  <div className="space-y-2">
-                    {!showBirthForm ? (
-                      <button onClick={() => { setShowBirthForm(true); setBirthDate(today()) }}
-                        className="w-full bg-[#3B6D11] text-white text-sm font-medium py-2.5 rounded-full hover:bg-[#2d5409] transition-colors cursor-pointer">
-                        Record Birth
+
+                {/* Birth form */}
+                {(detailAnimal.status === 'in_calf' && showBirthForm) && (
+                  <div className="bg-zinc-50 rounded-xl p-3 space-y-2">
+                    <p className="text-xs font-medium text-zinc-700">New Calf Details</p>
+                    <input required value={birthTag} onChange={e => setBirthTag(e.target.value)}
+                      placeholder="Calf tag (required)" className={input} />
+                    <select value={birthGender} onChange={e => setBirthGender(e.target.value as 'M' | 'F')} className={sel}>
+                      <option value="F">Female</option>
+                      <option value="M">Male</option>
+                    </select>
+                    <input type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} className={input} />
+                    <div className="flex gap-2">
+                      <button onClick={() => setShowBirthForm(false)}
+                        className="flex-1 border border-zinc-200 text-zinc-600 text-xs py-2 rounded-full cursor-pointer">
+                        Cancel
                       </button>
-                    ) : (
-                      <div className="bg-zinc-50 rounded-xl p-3 space-y-2">
-                        <p className="text-xs font-medium text-zinc-700">New Calf Details</p>
-                        <input required value={birthTag} onChange={e => setBirthTag(e.target.value)}
-                          placeholder="Calf tag (required)" className={input} />
-                        <select value={birthGender} onChange={e => setBirthGender(e.target.value as 'M' | 'F')} className={sel}>
-                          <option value="F">Female</option>
-                          <option value="M">Male</option>
-                        </select>
-                        <input type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} className={input} />
-                        <div className="flex gap-2">
-                          <button onClick={() => setShowBirthForm(false)}
-                            className="flex-1 border border-zinc-200 text-zinc-600 text-xs py-2 rounded-full cursor-pointer">
-                            Cancel
-                          </button>
-                          <button disabled={!birthTag.trim()} onClick={() => {
-                            if (!birthTag.trim()) return
-                            addDoc(collection(db, 'cattle'), {
-                              tag: birthTag,
-                              gender: birthGender,
-                              isBull: false,
-                              dob: birthDate,
-                              status: 'active',
-                              group: detailAnimal.group,
-                              motherId: detailAnimal.id,
-                              owner: detailAnimal.owner,
-                              breed: detailAnimal.breed,
-                              paddockId: detailAnimal.paddockId,
-                              notes: null,
-                              active: true,
-                              created_at: Timestamp.now(),
-                            }).catch(console.error)
-                            updateDoc(doc(db, 'cattle', detailAnimal.id), { status: 'active' }).catch(console.error)
-                            const updated = { ...detailAnimal, status: 'active' as AnimalStatus }
-                            setDetailAnimal(updated)
-                            setAnimals(prev => prev.map(a => a.id === detailAnimal.id ? { ...a, status: 'active' as AnimalStatus } : a))
-                            setShowBirthForm(false)
-                            setBirthTag('')
-                            setBirthGender('F')
-                            setBirthDate(today())
-                            fetchAll(true)
-                          }}
-                            className="flex-1 bg-[#3B6D11] text-white text-xs py-2 rounded-full cursor-pointer disabled:opacity-50">
-                            Save
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                      <button disabled={!birthTag.trim()} onClick={() => {
+                        if (!birthTag.trim()) return
+                        addDoc(collection(db, 'cattle'), {
+                          tag: birthTag, gender: birthGender, isBull: false, dob: birthDate,
+                          status: 'active', group: detailAnimal.group, motherId: detailAnimal.id,
+                          owner: detailAnimal.owner, breed: detailAnimal.breed,
+                          paddockId: detailAnimal.paddockId, notes: null, active: true,
+                          created_at: Timestamp.now(),
+                        }).catch(console.error)
+                        changeStatus(detailAnimal, 'active')
+                        setShowBirthForm(false); setBirthTag(''); setBirthGender('F'); setBirthDate(today())
+                        fetchAll(true)
+                      }}
+                        className="flex-1 bg-[#3B6D11] text-white text-xs py-2 rounded-full cursor-pointer disabled:opacity-50">
+                        Save
+                      </button>
+                    </div>
                   </div>
                 )}
-                {detailAnimal.ageYears != null && <InfoRow label="Age" value={`${detailAnimal.ageYears.toFixed(1)} years`} />}
-                {detailAnimal.breed && <InfoRow label="Breed" value={detailAnimal.breed} />}
-                {detailAnimal.group && <InfoRow label="Group" value={`Group ${detailAnimal.group}`} />}
-                {detailAnimal.owner && <InfoRow label="Owner" value={detailAnimal.owner} />}
-                {detailAnimal.notes && <InfoRow label="Notes" value={detailAnimal.notes} />}
-                <div className="pt-2">
+
+                {/* Mother info */}
+                {detailAnimal.motherId && (() => {
+                  const mother = allAnimals.find(a => a.id === detailAnimal.motherId)
+                  if (!mother) return null
+                  return (
+                    <div className="bg-zinc-50 rounded-xl p-3">
+                      <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">Mother</p>
+                      <button onClick={() => openDetail(mother)}
+                        className="w-full flex items-center justify-between cursor-pointer">
+                        <div>
+                          <span className="text-sm font-medium text-zinc-900 font-[family-name:var(--font-dm-mono)]">{fmt(mother.tag)}</span>
+                          <span className="text-xs text-zinc-500 ml-2">{mother.type}</span>
+                          {mother.breed && <span className="text-xs text-zinc-400 ml-2">{mother.breed}</span>}
+                        </div>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-300">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  )
+                })()}
+
+                {/* Offspring */}
+                {detailAnimal.hasOffspring && (() => {
+                  const offspring = allAnimals.filter(a => a.motherId === detailAnimal.id)
+                  if (!offspring.length) return null
+                  return (
+                    <div className="bg-zinc-50 rounded-xl p-3">
+                      <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">Offspring ({offspring.length})</p>
+                      <div className="space-y-1">
+                        {offspring.map(calf => (
+                          <button key={calf.id} onClick={() => openDetail(calf)}
+                            className="w-full flex items-center justify-between cursor-pointer py-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-zinc-900 font-[family-name:var(--font-dm-mono)]">{fmt(calf.tag)}</span>
+                              <span className="text-xs text-zinc-500">{calf.type}</span>
+                              {calf.ageYears !== null && <span className="text-xs text-zinc-400">{fmtAge(calf.ageYears)}</span>}
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${STATUS_CLASS[calf.status]}`}>
+                                {STATUS_LABEL[calf.status]}
+                              </span>
+                            </div>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-300">
+                              <polyline points="9 18 15 12 9 6" />
+                            </svg>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                <div className="pt-1">
                   <button onClick={() => openEdit(detailAnimal)}
                     className="w-full border border-zinc-200 text-zinc-700 text-sm py-2.5 rounded-full hover:bg-zinc-50 transition-colors cursor-pointer">
                     Edit Details
@@ -614,103 +912,169 @@ export default function LivestockPage() {
               </div>
             )}
 
-            {detailTab === 'health' && (
-              <div className="space-y-4">
-                {/* Dip */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-zinc-700 uppercase tracking-wide">Dipping</p>
-                    <button onClick={() => setShowDipForm(true)}
-                      className="text-xs text-[#3B6D11] font-medium cursor-pointer">+ Record</button>
-                  </div>
-                  {showDipForm && (
-                    <div className="bg-zinc-50 rounded-xl p-3 space-y-2 mb-2">
-                      <input type="date" value={dipDate} onChange={e => setDipDate(e.target.value)} className={input} />
-                      <button onClick={recordDip} className="w-full bg-[#3B6D11] text-white text-xs py-2 rounded-full cursor-pointer">Save</button>
-                    </div>
-                  )}
-                  {detailAnimal.dips?.length ? (
-                    detailAnimal.dips.slice(0, 5).map(d => (
-                      <div key={d.id} className="flex items-center justify-between py-1.5 border-b border-zinc-50 last:border-0">
-                        <span className="text-sm text-zinc-700">{d.date}</span>
-                        <span className="text-xs text-green-600">Dipped</span>
+            {/* ── History tab ── */}
+            {detailTab === 'history' && (
+              <div className="space-y-2">
+                {(() => {
+                  // Merge all records into a unified timeline
+                  const events: { date: string; label: string; detail?: string }[] = []
+                  detailAnimal.dips?.forEach(d => events.push({ date: d.date, label: 'Dipped' }))
+                  detailAnimal.vaccinations?.forEach(v => events.push({ date: v.date, label: `Vaccination: ${v.type}`, detail: v.vaccineUsed ?? undefined }))
+                  const weightsSorted = [...(detailAnimal.weights ?? [])].sort((a, b) => b.date.localeCompare(a.date))
+                  weightsSorted.forEach(w => events.push({ date: w.date, label: `Weight: ${w.weightKg} kg` }))
+                  detailAnimal.statusChanges?.forEach(sc => events.push({
+                    date: sc.date,
+                    label: `Status: ${sc.fromStatus ? `${STATUS_LABEL[sc.fromStatus]} → ` : ''}${STATUS_LABEL[sc.toStatus]}`,
+                    detail: sc.notes ?? undefined,
+                  }))
+                  events.sort((a, b) => b.date.localeCompare(a.date))
+                  if (!events.length) return <p className="text-xs text-zinc-400 py-8 text-center">No records yet.</p>
+                  return events.map((ev, i) => (
+                    <div key={i} className="bg-zinc-50 rounded-xl px-3 py-2.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-zinc-800">{ev.label}</span>
+                        <span className="text-xs text-zinc-400">{ev.date}</span>
                       </div>
-                    ))
-                  ) : <p className="text-xs text-zinc-400">No dip records.</p>}
-                </div>
-
-                {/* Vaccinations */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-zinc-700 uppercase tracking-wide">Vaccinations</p>
-                    <button onClick={() => setShowVaccForm(true)} className="text-xs text-[#3B6D11] font-medium cursor-pointer">+ Record</button>
-                  </div>
-                  {showVaccForm && (
-                    <div className="bg-zinc-50 rounded-xl p-3 space-y-2 mb-2">
-                      <input type="date" value={vaccDate} onChange={e => setVaccDate(e.target.value)} className={input} />
-                      <input value={vaccType} onChange={e => setVaccType(e.target.value)} placeholder="Vaccination type" className={input} />
-                      <input value={vaccineUsed} onChange={e => setVaccineUsed(e.target.value)} placeholder="Vaccine product (optional)" className={input} />
-                      <button onClick={recordVaccination} className="w-full bg-[#3B6D11] text-white text-xs py-2 rounded-full cursor-pointer">Save</button>
+                      {ev.detail && <p className="text-xs text-zinc-500 mt-0.5">{ev.detail}</p>}
                     </div>
-                  )}
-                  {detailAnimal.vaccinations?.length ? (
-                    detailAnimal.vaccinations.slice(0, 5).map(v => (
-                      <div key={v.id} className="flex items-center justify-between py-1.5 border-b border-zinc-50 last:border-0">
-                        <span className="text-sm text-zinc-700">{v.type}</span>
-                        <span className="text-xs text-zinc-400">{v.date}</span>
-                      </div>
-                    ))
-                  ) : <p className="text-xs text-zinc-400">No vaccinations recorded.</p>}
-                </div>
-
-                {/* Weights */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-zinc-700 uppercase tracking-wide">Weights</p>
-                    <button onClick={() => setShowWeightForm(true)} className="text-xs text-[#3B6D11] font-medium cursor-pointer">+ Record</button>
-                  </div>
-                  {showWeightForm && (
-                    <div className="bg-zinc-50 rounded-xl p-3 space-y-2 mb-2">
-                      <input type="date" value={weightDate} onChange={e => setWeightDate(e.target.value)} className={input} />
-                      <input type="number" value={weightKg} onChange={e => setWeightKg(e.target.value)} placeholder="Weight (kg)" className={input} />
-                      <button onClick={recordWeight} className="w-full bg-[#3B6D11] text-white text-xs py-2 rounded-full cursor-pointer">Save</button>
-                    </div>
-                  )}
-                  {detailAnimal.weights?.length ? (
-                    detailAnimal.weights.slice(0, 5).map(w => (
-                      <div key={w.id} className="flex items-center justify-between py-1.5 border-b border-zinc-50 last:border-0">
-                        <span className="text-sm font-medium text-zinc-900">{w.weightKg} kg</span>
-                        <span className="text-xs text-zinc-400">{w.date}</span>
-                      </div>
-                    ))
-                  ) : <p className="text-xs text-zinc-400">No weight records.</p>}
-                </div>
+                  ))
+                })()}
               </div>
             )}
 
-            {detailTab === 'history' && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-zinc-700 uppercase tracking-wide mb-2">Status History</p>
-                {detailAnimal.statusChanges?.length ? (
-                  detailAnimal.statusChanges.map(sc => (
-                    <div key={sc.id} className="bg-zinc-50 rounded-xl px-3 py-2.5">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-zinc-700">
-                          {sc.fromStatus ? `${sc.fromStatus.replace('_',' ')} → ` : ''}{sc.toStatus.replace('_', ' ')}
-                        </span>
-                        <span className="text-xs text-zinc-400">{sc.date}</span>
-                      </div>
-                      {sc.notes && <p className="text-xs text-zinc-500 mt-0.5">{sc.notes}</p>}
+            {/* ── Dips tab ── */}
+            {detailTab === 'dips' && (
+              <div className="space-y-1">
+                {!detailAnimal.dips?.length
+                  ? <p className="text-xs text-zinc-400 py-8 text-center">No dip records.</p>
+                  : detailAnimal.dips.map(d => (
+                    <div key={d.id} className="flex items-center justify-between py-2 border-b border-zinc-50">
+                      <span className="text-sm text-zinc-700">{d.date}</span>
+                      <span className="text-xs text-green-600">Dipped</span>
                     </div>
                   ))
-                ) : <p className="text-xs text-zinc-400">No status changes recorded.</p>}
+                }
+              </div>
+            )}
+
+            {/* ── Weights tab ── */}
+            {detailTab === 'weights' && (
+              <div className="space-y-3">
+                {!detailAnimal.weights?.length
+                  ? <p className="text-xs text-zinc-400 py-8 text-center">No weight records.</p>
+                  : (
+                    <>
+                      {detailAnimal.weights.length > 1 && (
+                        <div style={{ height: 140 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={detailAnimal.weights} margin={{ top: 4, right: 8, bottom: 4, left: -10 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f4" />
+                              <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={d => d.slice(5)} />
+                              <YAxis tick={{ fontSize: 9 }} unit="kg" />
+                              <Tooltip />
+                              <Line type="monotone" dataKey="weightKg" stroke="#3B6D11" strokeWidth={2} dot={{ r: 3 }} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                      {[...detailAnimal.weights].reverse().map(w => (
+                        <div key={w.id} className="flex items-center justify-between py-2 border-b border-zinc-50">
+                          <span className="text-sm font-medium text-zinc-900">{w.weightKg} kg</span>
+                          <span className="text-xs text-zinc-400">{w.date}</span>
+                        </div>
+                      ))}
+                    </>
+                  )
+                }
+              </div>
+            )}
+
+            {/* ── Vaccinations tab ── */}
+            {detailTab === 'vaccinations' && (
+              <div className="space-y-1">
+                {!detailAnimal.vaccinations?.length
+                  ? <p className="text-xs text-zinc-400 py-8 text-center">No vaccination records.</p>
+                  : detailAnimal.vaccinations.map(v => (
+                    <div key={v.id} className="flex items-center justify-between py-2 border-b border-zinc-50">
+                      <div>
+                        <span className="text-sm text-zinc-800">{v.type}</span>
+                        {v.vaccineUsed && <p className="text-xs text-zinc-400">{v.vaccineUsed}</p>}
+                      </div>
+                      <span className="text-xs text-zinc-400">{v.date}</span>
+                    </div>
+                  ))
+                }
               </div>
             )}
           </div>
         )}
       </Modal>
 
-      {/* ── Add / Edit modal (rendered after detail so it appears on top) ── */}
+      {/* ── Record Dip (single animal) ─────────────────────────────────────── */}
+      <Modal open={showDipModal} onClose={() => setShowDipModal(false)} title="Record Dip">
+        <div className="space-y-4">
+          <Field label="Date">
+            <input type="date" value={dipDate} onChange={e => setDipDate(e.target.value)} className={input} />
+          </Field>
+          <button onClick={() => {
+            if (!detailAnimal) return
+            recordDip(detailAnimal.id, dipDate, () => {
+              setShowDipModal(false)
+              openDetail({ ...detailAnimal, lastDipDate: dipDate, dipStatus: getDipStatus(dipDate) })
+            })
+          }} className="w-full bg-[#3B6D11] text-white text-sm font-medium py-3 rounded-full cursor-pointer">
+            Save
+          </button>
+        </div>
+      </Modal>
+
+      {/* ── Record Weight (single animal) ─────────────────────────────────── */}
+      <Modal open={showWeightModal} onClose={() => setShowWeightModal(false)} title="Record Weight">
+        <div className="space-y-4">
+          <Field label="Date">
+            <input type="date" value={weightDate} onChange={e => setWeightDate(e.target.value)} className={input} />
+          </Field>
+          <Field label="Weight (kg)">
+            <input type="number" step="0.1" value={weightKg} onChange={e => setWeightKg(e.target.value)}
+              placeholder="e.g. 350" className={input} />
+          </Field>
+          <button onClick={() => {
+            if (!detailAnimal) return
+            recordWeight(detailAnimal.id, weightDate, weightKg, () => {
+              setShowWeightModal(false)
+              openDetail(detailAnimal)
+            })
+          }} className="w-full bg-[#3B6D11] text-white text-sm font-medium py-3 rounded-full cursor-pointer">
+            Save
+          </button>
+        </div>
+      </Modal>
+
+      {/* ── Record Vaccination (single animal) ────────────────────────────── */}
+      <Modal open={showVaccModal} onClose={() => setShowVaccModal(false)} title="Record Vaccination">
+        <div className="space-y-4">
+          <Field label="Date">
+            <input type="date" value={vaccDate} onChange={e => setVaccDate(e.target.value)} className={input} />
+          </Field>
+          <Field label="Vaccination type" required>
+            <input value={vaccType} onChange={e => setVaccType(e.target.value)} placeholder="e.g. Anthrax, FMD" className={input} />
+          </Field>
+          <Field label="Vaccine product (optional)">
+            <input value={vaccineUsed} onChange={e => setVaccineUsed(e.target.value)} placeholder="Brand/product name" className={input} />
+          </Field>
+          <button disabled={!vaccType} onClick={() => {
+            if (!detailAnimal) return
+            recordVacc(detailAnimal.id, vaccDate, vaccType, vaccineUsed, () => {
+              setShowVaccModal(false)
+              openDetail(detailAnimal)
+            })
+          }} className="w-full bg-[#3B6D11] text-white text-sm font-medium py-3 rounded-full cursor-pointer disabled:opacity-50">
+            Save
+          </button>
+        </div>
+      </Modal>
+
+      {/* ── Add / Edit modal ──────────────────────────────────────────────── */}
       <Modal open={showForm} onClose={() => setShowForm(false)} title={editId ? 'Edit Animal' : 'Add Animal'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -729,25 +1093,32 @@ export default function LivestockPage() {
           {form.gender === 'M' && (
             <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
               <input type="checkbox" checked={form.isBull}
-                onChange={e => setForm({ ...form, isBull: e.target.checked })}
-                className="rounded" />
+                onChange={e => setForm({ ...form, isBull: e.target.checked })} className="rounded" />
               Mark as Bull
             </label>
           )}
 
-          {form.gender === 'F' && (
-            <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
-              <input type="checkbox" checked={form.status === 'in_calf'}
-                onChange={e => setForm({ ...form, status: e.target.checked ? 'in_calf' : 'active' })}
-                className="rounded" />
-              In calf
-            </label>
-          )}
+          {form.gender === 'F' && (() => {
+            const dobVal = form.dob
+            const isUnder1 = dobVal
+              ? (Date.now() - new Date(dobVal).getTime()) / (365.25 * 86_400_000) < 1
+              : false
+            return !isUnder1 ? (
+              <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
+                <input type="checkbox" checked={form.inCalf}
+                  onChange={e => setForm({ ...form, inCalf: e.target.checked })} className="rounded" />
+                In calf
+              </label>
+            ) : null
+          })()}
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Status">
-              <select value={form.status === 'in_calf' ? 'active' : form.status} onChange={e => setForm({ ...form, status: e.target.value as AnimalStatus })} className={sel}>
-                {STATUS_OPTS.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+              <select value={form.status}
+                onChange={e => setForm({ ...form, status: e.target.value as AnimalStatus })} className={sel}>
+                {(['active', 'sick', 'sold', 'lost', 'deceased'] as AnimalStatus[]).map(s =>
+                  <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                )}
               </select>
             </Field>
             <Field label="Group">
@@ -802,15 +1173,15 @@ export default function LivestockPage() {
         </form>
       </Modal>
 
-      {/* ── Batch dip modal ────────────────────────────────────────────────── */}
+      {/* ── Batch Dip modal ────────────────────────────────────────────────── */}
       <Modal open={showBatchDip} onClose={() => setShowBatchDip(false)} title="Record Dipping Session">
         <div className="space-y-4">
           <Field label="Dip Date">
             <input type="date" value={batchDipDate} onChange={e => setBatchDipDate(e.target.value)} className={input} />
           </Field>
-          <p className="text-xs text-zinc-500">Select animals that were dipped ({batchDipTags.size} selected):</p>
+          <p className="text-xs text-zinc-500">Select animals dipped ({batchDipTags.size} selected):</p>
           <div className="space-y-1 max-h-64 overflow-y-auto">
-            {animals.filter(a => a.status === 'active' || a.status === 'in_calf').map(a => (
+            {eligibleForBatch.map(a => (
               <label key={a.id} className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-zinc-50 cursor-pointer">
                 <input type="checkbox" checked={batchDipTags.has(a.id)}
                   onChange={e => {
@@ -825,7 +1196,7 @@ export default function LivestockPage() {
             ))}
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setBatchDipTags(new Set(animals.filter(a => a.status === 'active' || a.status === 'in_calf').map(a => a.id)))}
+            <button onClick={() => setBatchDipTags(new Set(eligibleForBatch.map(a => a.id)))}
               className="flex-1 text-xs border border-zinc-200 py-2 rounded-full cursor-pointer">Select All</button>
             <button onClick={() => setBatchDipTags(new Set())}
               className="flex-1 text-xs border border-zinc-200 py-2 rounded-full cursor-pointer">Clear</button>
@@ -836,6 +1207,100 @@ export default function LivestockPage() {
           </button>
         </div>
       </Modal>
+
+      {/* ── Batch Vaccination modal ────────────────────────────────────────── */}
+      <Modal open={showBatchVacc} onClose={() => setShowBatchVacc(false)} title="Record Vaccination Session">
+        <div className="space-y-4">
+          <Field label="Date">
+            <input type="date" value={batchVaccDate} onChange={e => setBatchVaccDate(e.target.value)} className={input} />
+          </Field>
+          <Field label="Vaccination type" required>
+            <input value={batchVaccType} onChange={e => setBatchVaccType(e.target.value)}
+              placeholder="e.g. Anthrax, FMD" className={input} />
+          </Field>
+          <Field label="Vaccine product (optional)">
+            <input value={batchVaccineUsed} onChange={e => setBatchVaccineUsed(e.target.value)}
+              placeholder="Brand/product name" className={input} />
+          </Field>
+          <p className="text-xs text-zinc-500">Select animals ({batchVaccTags.size} selected):</p>
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {eligibleForBatch.map(a => (
+              <label key={a.id} className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-zinc-50 cursor-pointer">
+                <input type="checkbox" checked={batchVaccTags.has(a.id)}
+                  onChange={e => {
+                    const next = new Set(batchVaccTags)
+                    e.target.checked ? next.add(a.id) : next.delete(a.id)
+                    setBatchVaccTags(next)
+                  }} className="rounded" />
+                <span className="font-[family-name:var(--font-dm-mono)] text-sm">{fmt(a.tag)}</span>
+                <span className="text-xs text-zinc-400">{a.type}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setBatchVaccTags(new Set(eligibleForBatch.map(a => a.id)))}
+              className="flex-1 text-xs border border-zinc-200 py-2 rounded-full cursor-pointer">Select All</button>
+            <button onClick={() => setBatchVaccTags(new Set())}
+              className="flex-1 text-xs border border-zinc-200 py-2 rounded-full cursor-pointer">Clear</button>
+          </div>
+          <button onClick={submitBatchVacc} disabled={!batchVaccTags.size || !batchVaccType}
+            className="w-full bg-blue-600 text-white text-sm font-medium py-3 rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer">
+            Record {batchVaccTags.size} Vaccination{batchVaccTags.size !== 1 ? 's' : ''}
+          </button>
+        </div>
+      </Modal>
+
+      {/* ── Batch Weight modal ─────────────────────────────────────────────── */}
+      <Modal open={showBatchWeight} onClose={() => setShowBatchWeight(false)} title="Record Weights">
+        <div className="space-y-4">
+          <Field label="Date">
+            <input type="date" value={batchWeightDate} onChange={e => setBatchWeightDate(e.target.value)} className={input} />
+          </Field>
+          <p className="text-xs text-zinc-500">Enter weight for each animal (leave blank to skip):</p>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {eligibleForBatch.map(a => (
+              <div key={a.id} className="flex items-center gap-3">
+                <span className="font-[family-name:var(--font-dm-mono)] text-sm text-zinc-700 w-12">{fmt(a.tag)}</span>
+                <span className="text-xs text-zinc-400 flex-1">{a.type}</span>
+                <input type="number" step="0.1" placeholder="kg"
+                  value={batchWeights.get(a.id) ?? ''}
+                  onChange={e => {
+                    const next = new Map(batchWeights)
+                    e.target.value ? next.set(a.id, e.target.value) : next.delete(a.id)
+                    setBatchWeights(next)
+                  }}
+                  className="w-24 border border-zinc-200 rounded-lg px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-[#3B6D11]/20" />
+              </div>
+            ))}
+          </div>
+          <button onClick={submitBatchWeight} disabled={!batchWeights.size}
+            className="w-full bg-purple-600 text-white text-sm font-medium py-3 rounded-full hover:bg-purple-700 transition-colors disabled:opacity-50 cursor-pointer">
+            Save {batchWeights.size} Weight{batchWeights.size !== 1 ? 's' : ''}
+          </button>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+// ── Mini bar chart helper ─────────────────────────────────────────────────────
+
+function MiniBarChart({ title, data }: { title: string; data: { name: string; value: number }[] }) {
+  if (!data.length) return null
+  return (
+    <div>
+      <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">{title}</p>
+      <div style={{ height: 100 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 0, right: 4, bottom: 0, left: -20 }} barSize={16}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f4" vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+            <YAxis tick={{ fontSize: 9 }} allowDecimals={false} />
+            <Tooltip />
+            <Bar dataKey="value" fill="#3B6D11" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
 }
@@ -843,33 +1308,9 @@ export default function LivestockPage() {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function emptyForm() {
-  return { tag: '', gender: 'F' as AnimalGender, isBull: false, dob: '', status: 'active' as AnimalStatus, group: '', motherId: '', owner: '', breed: '', paddockId: '', notes: '' }
+  return {
+    tag: '', gender: 'F' as AnimalGender, isBull: false, dob: '',
+    status: 'active' as AnimalStatus, inCalf: false,
+    group: '', motherId: '', owner: '', breed: '', paddockId: '', notes: '',
+  }
 }
-
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-const input = 'w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#3B6D11]/20 bg-white'
-const sel = `${input}`
-
-function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-zinc-800 mb-1.5">
-        {label}{required && <span className="text-red-400 ml-0.5">*</span>}
-      </label>
-      {children}
-    </div>
-  )
-}
-
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between py-2 border-b border-zinc-50">
-      <span className="text-xs text-zinc-500">{label}</span>
-      <span className="text-sm text-zinc-900">{value}</span>
-    </div>
-  )
-}
-
