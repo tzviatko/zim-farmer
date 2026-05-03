@@ -14,7 +14,6 @@ import {
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  BarChart, Bar,
 } from 'recharts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -60,9 +59,8 @@ const DIP_CLASS: Record<DipStatus, string> = {
   overdue: 'bg-red-50 text-red-600',
 }
 
-const OWNER_OPTS: AnimalOwner[] = ['Amaval', 'Tsinda - Cornelia', 'Tsinda - Other']
-const GROUP_OPTS: AnimalGroup[] = ['A', 'B']
 const PIE_COLORS = ['#3B6D11','#6aaa2a','#a3d977','#c9e9a0','#e8f5d0','#1a3d06','#92c25d','#d4edaa']
+const PREDEFINED_BREEDS = ['Afrikaner', 'Angus', 'Brahman', 'Hereford', 'Limousin', 'Mashona', 'Nguni', 'Simmental', 'Tuli']
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -311,50 +309,6 @@ export default function LivestockPage() {
     sick: activeAnimals.filter(a => a.status === 'sick').length,
   }), [activeAnimals])
 
-  // Pie chart data — type breakdown of active animals
-  const pieData = useMemo(() => {
-    const map = new Map<string, number>()
-    activeAnimals.forEach(a => map.set(a.type, (map.get(a.type) ?? 0) + 1))
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
-  }, [activeAnimals])
-
-  // Analytics charts data
-  const groupData = useMemo(() => {
-    const map = new Map<string, number>()
-    activeAnimals.forEach(a => {
-      const g = a.group ? `Group ${a.group}` : 'None'
-      map.set(g, (map.get(g) ?? 0) + 1)
-    })
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
-  }, [activeAnimals])
-
-  const locationData = useMemo(() => {
-    const map = new Map<string, number>()
-    activeAnimals.forEach(a => {
-      const loc = paddocks.find(p => p.id === a.paddockId)?.name ?? 'Unknown'
-      map.set(loc, (map.get(loc) ?? 0) + 1)
-    })
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
-  }, [activeAnimals, paddocks])
-
-  const breedData = useMemo(() => {
-    const map = new Map<string, number>()
-    activeAnimals.forEach(a => {
-      const b = a.breed ?? 'Unknown'
-      map.set(b, (map.get(b) ?? 0) + 1)
-    })
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
-  }, [activeAnimals])
-
-  const ownerData = useMemo(() => {
-    const map = new Map<string, number>()
-    activeAnimals.forEach(a => {
-      const o = a.owner ?? 'Unknown'
-      map.set(o, (map.get(o) ?? 0) + 1)
-    })
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
-  }, [activeAnimals])
-
   const filtered = useMemo(() => {
     let list = activeAnimals
     if (statFilter) list = list.filter(a => a.status === statFilter)
@@ -369,6 +323,68 @@ export default function LivestockPage() {
     }
     return list
   }, [activeAnimals, statFilter, typeFilter, search])
+
+  // Pie chart data — type breakdown of filtered animals
+  const pieData = useMemo(() => {
+    const map = new Map<string, number>()
+    filtered.forEach(a => map.set(a.type, (map.get(a.type) ?? 0) + 1))
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
+  }, [filtered])
+
+  // Analytics charts data — all use filtered so they update with filters
+  const groupData = useMemo(() => {
+    const map = new Map<string, number>()
+    filtered.forEach(a => {
+      const g = a.group ? `Group ${a.group}` : 'None'
+      map.set(g, (map.get(g) ?? 0) + 1)
+    })
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
+  }, [filtered])
+
+  const locationData = useMemo(() => {
+    const map = new Map<string, number>()
+    filtered.forEach(a => {
+      const loc = paddocks.find(p => p.id === a.paddockId)?.name ?? 'Unknown'
+      map.set(loc, (map.get(loc) ?? 0) + 1)
+    })
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
+  }, [filtered, paddocks])
+
+  const breedData = useMemo(() => {
+    const map = new Map<string, number>()
+    filtered.forEach(a => {
+      const b = a.breed ?? 'Unknown'
+      map.set(b, (map.get(b) ?? 0) + 1)
+    })
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
+  }, [filtered])
+
+  const ownerData = useMemo(() => {
+    const map = new Map<string, number>()
+    filtered.forEach(a => {
+      const o = a.owner ?? 'Unknown'
+      map.set(o, (map.get(o) ?? 0) + 1)
+    })
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
+  }, [filtered])
+
+  const knownGroups = useMemo(() => {
+    const s = new Set<string>()
+    allAnimals.forEach(a => { if (a.group) s.add(a.group) })
+    return [...s].sort()
+  }, [allAnimals])
+
+  const knownBreeds = useMemo(() => {
+    const s = new Set<string>(PREDEFINED_BREEDS)
+    allAnimals.forEach(a => { if (a.breed) s.add(a.breed) })
+    return [...s].sort()
+  }, [allAnimals])
+
+  const knownOwners = useMemo(() => {
+    const s = new Set<string>(['Amaval', 'Tsinda - Cornelia', 'Tsinda - Other'])
+    allAnimals.forEach(a => { if (a.owner) s.add(a.owner) })
+    return [...s].sort()
+  }, [allAnimals])
 
   // ── Form handlers ──────────────────────────────────────────────────────────
 
@@ -618,10 +634,10 @@ export default function LivestockPage() {
             </button>
             {showCharts && (
               <div className="px-4 pb-4 space-y-5 border-t border-zinc-50">
-                <MiniBarChart title="By Group" data={groupData} />
-                <MiniBarChart title="By Location" data={locationData} />
-                <MiniBarChart title="By Breed" data={breedData} />
-                <MiniBarChart title="By Owner" data={ownerData} />
+                <MiniPieChart title="By Group" data={groupData} />
+                <MiniPieChart title="By Location" data={locationData} />
+                <MiniPieChart title="By Breed" data={breedData} />
+                <MiniPieChart title="By Owner" data={ownerData} />
               </div>
             )}
           </div>
@@ -743,7 +759,9 @@ export default function LivestockPage() {
 
       {/* ── Animal detail modal ──────────────────────────────────────────────── */}
       <Modal open={!!detailAnimal} onClose={() => { setDetailAnimal(null); setShowBirthForm(false) }}
-        title={detailAnimal ? `Tag ${fmt(detailAnimal.tag)}` : ''} minContentHeight="380px">
+        title={detailAnimal ? (
+          <span className="font-[family-name:var(--font-dm-mono)] text-xl font-bold text-zinc-900">{fmt(detailAnimal.tag)}</span>
+        ) : ''} minContentHeight="380px">
         {detailAnimal && (
           <div className="space-y-3">
 
@@ -771,7 +789,7 @@ export default function LivestockPage() {
 
             {/* Tabs */}
             <div className="flex bg-zinc-100 rounded-full p-0.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-              {(['info', 'history', 'dips', 'weights', 'vaccinations'] as const).map(t => (
+              {(['info', 'dips', 'weights', 'vaccinations', 'history'] as const).map(t => (
                 <button key={t} onClick={() => setDetailTab(t)}
                   className={`flex-1 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer capitalize whitespace-nowrap px-2 ${
                     detailTab === t ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
@@ -1121,12 +1139,11 @@ export default function LivestockPage() {
                 )}
               </select>
             </Field>
-            <Field label="Group">
-              <select value={form.group} onChange={e => setForm({ ...form, group: e.target.value })} className={sel}>
-                <option value="">None</option>
-                {GROUP_OPTS.map(g => <option key={g} value={g}>Group {g}</option>)}
-              </select>
-            </Field>
+            <CustomSelectField label="Group"
+              value={form.group}
+              onChange={v => setForm({ ...form, group: v })}
+              options={knownGroups}
+              placeholder="None" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -1141,17 +1158,17 @@ export default function LivestockPage() {
             </Field>
           </div>
 
-          <Field label="Breed">
-            <input value={form.breed} onChange={e => setForm({ ...form, breed: e.target.value })}
-              placeholder="e.g. Brahman, Nguni" className={input} />
-          </Field>
+          <CustomSelectField label="Breed"
+            value={form.breed}
+            onChange={v => setForm({ ...form, breed: v })}
+            options={knownBreeds}
+            placeholder="Unknown" />
 
-          <Field label="Owner">
-            <select value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })} className={sel}>
-              <option value="">Unknown</option>
-              {OWNER_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </Field>
+          <CustomSelectField label="Owner"
+            value={form.owner}
+            onChange={v => setForm({ ...form, owner: v })}
+            options={knownOwners}
+            placeholder="Unknown" />
 
           <Field label="Notes">
             <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
@@ -1189,7 +1206,7 @@ export default function LivestockPage() {
                     e.target.checked ? next.add(a.id) : next.delete(a.id)
                     setBatchDipTags(next)
                   }} className="rounded" />
-                <span className="font-[family-name:var(--font-dm-mono)] text-sm">{fmt(a.tag)}</span>
+                <span className="font-[family-name:var(--font-dm-mono)] text-sm text-zinc-900">{fmt(a.tag)}</span>
                 <span className="text-xs text-zinc-400">{a.type}</span>
                 <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${DIP_CLASS[a.dipStatus]}`}>{DIP_LABEL[a.dipStatus]}</span>
               </label>
@@ -1232,7 +1249,7 @@ export default function LivestockPage() {
                     e.target.checked ? next.add(a.id) : next.delete(a.id)
                     setBatchVaccTags(next)
                   }} className="rounded" />
-                <span className="font-[family-name:var(--font-dm-mono)] text-sm">{fmt(a.tag)}</span>
+                <span className="font-[family-name:var(--font-dm-mono)] text-sm text-zinc-900">{fmt(a.tag)}</span>
                 <span className="text-xs text-zinc-400">{a.type}</span>
               </label>
             ))}
@@ -1260,7 +1277,7 @@ export default function LivestockPage() {
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {eligibleForBatch.map(a => (
               <div key={a.id} className="flex items-center gap-3">
-                <span className="font-[family-name:var(--font-dm-mono)] text-sm text-zinc-700 w-12">{fmt(a.tag)}</span>
+                <span className="font-[family-name:var(--font-dm-mono)] text-sm text-zinc-900 w-12">{fmt(a.tag)}</span>
                 <span className="text-xs text-zinc-400 flex-1">{a.type}</span>
                 <input type="number" step="0.1" placeholder="kg"
                   value={batchWeights.get(a.id) ?? ''}
@@ -1283,25 +1300,85 @@ export default function LivestockPage() {
   )
 }
 
-// ── Mini bar chart helper ─────────────────────────────────────────────────────
+// ── Mini pie chart helper ─────────────────────────────────────────────────────
 
-function MiniBarChart({ title, data }: { title: string; data: { name: string; value: number }[] }) {
+function MiniPieChart({ title, data }: { title: string; data: { name: string; value: number }[] }) {
   if (!data.length) return null
   return (
     <div>
       <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">{title}</p>
-      <div style={{ height: 100 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 0, right: 4, bottom: 0, left: -20 }} barSize={16}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f4" vertical={false} />
-            <XAxis dataKey="name" tick={{ fontSize: 9 }} />
-            <YAxis tick={{ fontSize: 9 }} allowDecimals={false} />
-            <Tooltip />
-            <Bar dataKey="value" fill="#3B6D11" radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="flex items-center gap-3">
+        <div style={{ width: 80, height: 80, flexShrink: 0 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie dataKey="value" data={data} cx="50%" cy="50%" outerRadius={36} innerRadius={16}>
+                {data.map((entry, i) => (
+                  <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="flex-1 space-y-1 min-w-0">
+          {data.map((entry, i) => (
+            <div key={entry.name} className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+              <span className="text-[10px] text-zinc-600 flex-1 truncate">{entry.name}</span>
+              <span className="text-[10px] font-semibold text-zinc-900">{entry.value}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
+  )
+}
+
+// ── Custom select with "Add new" option ───────────────────────────────────────
+
+function CustomSelectField({ label, value, onChange, options, placeholder }: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  options: string[]
+  placeholder?: string
+}) {
+  const [adding, setAdding] = useState(false)
+  const [newVal, setNewVal] = useState('')
+  const commit = () => {
+    if (newVal.trim()) { onChange(newVal.trim()); setAdding(false); setNewVal('') }
+  }
+  return (
+    <Field label={label}>
+      {adding ? (
+        <div className="flex gap-1.5">
+          <input autoFocus value={newVal} onChange={e => setNewVal(e.target.value)}
+            placeholder={`New ${label.toLowerCase()}`}
+            className={`${input} flex-1`}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); commit() }
+              if (e.key === 'Escape') { setAdding(false); setNewVal('') }
+            }} />
+          <button type="button" onClick={commit}
+            className="px-3 bg-[#3B6D11] text-white text-xs rounded-xl cursor-pointer shrink-0">
+            Add
+          </button>
+          <button type="button" onClick={() => { setAdding(false); setNewVal('') }}
+            className="px-3 border border-zinc-200 text-zinc-600 text-xs rounded-xl cursor-pointer shrink-0">
+            ✕
+          </button>
+        </div>
+      ) : (
+        <select value={value} onChange={e => {
+          if (e.target.value === '__new__') setAdding(true)
+          else onChange(e.target.value)
+        }} className={sel}>
+          <option value="">{placeholder ?? 'None'}</option>
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+          <option value="__new__">+ Add new…</option>
+        </select>
+      )}
+    </Field>
   )
 }
 

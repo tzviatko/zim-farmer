@@ -4,17 +4,19 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import { getDipStatus } from '../lib/types'
+import { getDipStatus, computeNextServiceMileage, getServiceStatus } from '../lib/types'
 import { seedTestData } from '../lib/seed'
 import { prefetchAllCollections } from '../lib/prefetch'
 
 type Stats = {
   livestock: number       // active + in_calf + sick only
+  dipOverdue: number
   inputsTotal: number     // total inventory items
   inputsLowStock: number
   staff: number
   staffSalaryTotal: number
   vehicles: number
+  vehicleServiceNeeded: number
   equipmentTotal: number
   equipmentInUse: number
   financeNetProfit: number
@@ -57,6 +59,7 @@ export default function Dashboard() {
           cattleSnap, staffSnap, inventorySnap, txSnap,
           vehicleSnap, equipmentSnap, equipUseSnap,
           revenueSnap, expenseSnap, cropsSnap, paddocksSnap,
+          dipSnap, mileageSnap, maintenanceSnap,
         ] = await Promise.all([
           getDocs(query(collection(db, 'cattle'), where('active', '==', true))),
           getDocs(query(collection(db, 'staff'), where('active', '==', true))),
@@ -69,6 +72,9 @@ export default function Dashboard() {
           getDocs(collection(db, 'expense_entries')),
           getDocs(collection(db, 'crops')),
           getDocs(collection(db, 'paddocks')),
+          getDocs(collection(db, 'dip_records')),
+          getDocs(collection(db, 'mileage_logs')),
+          getDocs(collection(db, 'maintenance_records')),
         ])
 
         // Livestock: exclude sold, lost, deceased
@@ -77,6 +83,53 @@ export default function Dashboard() {
         cattleSnap.docs.forEach(d => {
           const status = (d.data().status ?? 'active') as string
           if (!ARCHIVED_STATUSES.has(status)) livestock++
+        })
+
+        // Dip overdue count
+        const lastDipMap = new Map<string, string>()
+        dipSnap.docs.forEach(d => {
+          const data = d.data()
+          const aid = data.animalId as string
+          const date = data.date as string
+          if (!lastDipMap.has(aid) || date > lastDipMap.get(aid)!) lastDipMap.set(aid, date)
+        })
+        let dipOverdue = 0
+        cattleSnap.docs.forEach(d => {
+          const status = (d.data().status ?? 'active') as string
+          if (ARCHIVED_STATUSES.has(status)) return
+          const lastDip = lastDipMap.get(d.id) ?? null
+          if (getDipStatus(lastDip) === 'overdue') dipOverdue++
+        })
+
+        // Vehicle service needed
+        const vehicleMileageMap = new Map<string, number>()
+        mileageSnap.docs.forEach(d => {
+          const data = d.data()
+          const vid = data.vehicleId as string
+          const km = data.recordedMileage as number
+          if (km > (vehicleMileageMap.get(vid) ?? -Infinity)) vehicleMileageMap.set(vid, km)
+        })
+        const vehicleMaintMap = new Map<string, Array<{ serviceType: string; recordedMileage: number | null }>>()
+        maintenanceSnap.docs.forEach(d => {
+          const data = d.data()
+          const vid = data.vehicleId as string
+          if (!vehicleMaintMap.has(vid)) vehicleMaintMap.set(vid, [])
+          vehicleMaintMap.get(vid)!.push({ serviceType: data.serviceType as string, recordedMileage: data.recordedMileage as number | null })
+        })
+        let vehicleServiceNeeded = 0
+        vehicleSnap.docs.forEach(d => {
+          const data = d.data()
+          const intervalKm = data.serviceIntervalKm as number | null
+          if (!intervalKm) return
+          const currentKm = vehicleMileageMap.get(d.id) ?? 0
+          const maint = (vehicleMaintMap.get(d.id) ?? []).map(r => ({
+            id: '', vehicleId: d.id, serviceDate: '', notes: null, createdAt: '',
+            serviceType: r.serviceType as import('../lib/types').ServiceType,
+            recordedMileage: r.recordedMileage,
+          }))
+          const nextKm = computeNextServiceMileage(currentKm, intervalKm, maint)
+          const status = getServiceStatus(currentKm, nextKm)
+          if (status === 'overdue' || status === 'soon') vehicleServiceNeeded++
         })
 
         // Inputs
@@ -126,11 +179,13 @@ export default function Dashboard() {
 
         setStats({
           livestock,
+          dipOverdue,
           inputsTotal: inventorySnap.size,
           inputsLowStock,
           staff: staffSnap.size,
           staffSalaryTotal,
           vehicles: vehicleSnap.size,
+          vehicleServiceNeeded,
           equipmentTotal: equipmentSnap.size,
           equipmentInUse: inUseSet.size,
           financeNetProfit: revenue - expenses,
@@ -179,7 +234,9 @@ export default function Dashboard() {
 
           <ModuleCard href="/livestock" label="Livestock" icon="🐄"
             primary={loading ? '—' : String(stats!.livestock)}
-            alert={null} />
+            alert={!loading && stats!.dipOverdue > 0
+              ? `${stats!.dipOverdue} dip overdue`
+              : null} />
 
           <ModuleCard href="/inventory" label="Inputs" icon="📦"
             primary={loading ? '—' : String(stats!.inputsTotal)}
@@ -195,7 +252,9 @@ export default function Dashboard() {
 
           <ModuleCard href="/vehicles" label="Vehicles" icon="🚜"
             primary={loading ? '—' : String(stats!.vehicles)}
-            alert={null} />
+            alert={!loading && stats!.vehicleServiceNeeded > 0
+              ? `${stats!.vehicleServiceNeeded} need service`
+              : null} />
 
           <ModuleCard href="/equipment" label="Equipment" icon="🔧"
             primary={loading ? '—' : String(stats!.equipmentTotal)}
@@ -247,16 +306,16 @@ function ModuleCard({
   return (
     <Link href={href}
       className="bg-white rounded-2xl border border-zinc-100 p-4 shadow-sm hover:shadow-md hover:border-zinc-300 transition-all block">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-start justify-between mb-2">
         <span className="text-xl">{icon}</span>
+        {alert && (
+          <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium leading-tight text-right max-w-[80px] break-words">
+            {alert}
+          </span>
+        )}
       </div>
       <p className="text-xs text-zinc-400 mb-0.5">{label}</p>
       <p className={`text-2xl font-bold ${primaryColor ?? 'text-zinc-900'}`}>{primary}</p>
-      {alert && (
-        <span className="inline-block mt-1.5 text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium">
-          {alert}
-        </span>
-      )}
     </Link>
   )
 }

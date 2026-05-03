@@ -322,19 +322,19 @@ export default function InventoryPage() {
         {/* ── Stat squares ── */}
         <div className="grid grid-cols-3 gap-2">
           {([
-            { label: 'Total Inputs', value: counts.total,    filter: null,       activeColor: 'bg-zinc-800 text-white' },
-            { label: 'Restock Now',  value: counts.critical,  filter: 'critical' as StatFilter, activeColor: 'bg-red-500 text-white' },
-            { label: 'Restock Soon', value: counts.low,       filter: 'low' as StatFilter,      activeColor: 'bg-amber-400 text-white' },
+            { label: 'Total Inputs', value: counts.total,    filter: null                       },
+            { label: 'Restock Now',  value: counts.critical,  filter: 'critical' as StatFilter  },
+            { label: 'Restock Soon', value: counts.low,       filter: 'low' as StatFilter       },
           ]).map(s => (
             <button key={s.label}
               onClick={() => setStatFilter(prev => prev === s.filter ? null : s.filter)}
               className={`rounded-xl border p-3 shadow-sm text-center transition-all cursor-pointer ${
                 statFilter === s.filter
-                  ? s.activeColor + ' border-transparent'
+                  ? 'bg-[#3B6D11] border-[#3B6D11] text-white'
                   : 'bg-white border-zinc-100 text-zinc-900'
               }`}>
               <p className="text-xl font-bold">{loading ? '—' : s.value}</p>
-              <p className={`text-[10px] uppercase tracking-wide mt-0.5 ${statFilter === s.filter ? 'opacity-80' : 'text-zinc-400'}`}>
+              <p className={`text-[10px] uppercase tracking-wide mt-0.5 ${statFilter === s.filter ? 'text-white/70' : 'text-zinc-400'}`}>
                 {s.label}
               </p>
             </button>
@@ -400,9 +400,9 @@ export default function InventoryPage() {
 
         {/* ── Items list ── */}
         {loading ? (
-          <div className="space-y-2">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-20 bg-white rounded-2xl animate-pulse border border-zinc-100" />
+          <div className="grid grid-cols-3 gap-2">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-24 bg-white rounded-xl animate-pulse border border-zinc-100" />
             ))}
           </div>
         ) : filteredItems.length === 0 ? (
@@ -410,44 +410,31 @@ export default function InventoryPage() {
             {enrichedItems.length === 0 ? 'No inputs recorded yet.' : 'No items match this filter.'}
           </p>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-2">
             {filteredItems.map(item => {
               const st = STATUS_STYLES[item.status]
               const pct = item.parLevel
                 ? Math.min(100, Math.max(0, (item.currentBalance / (item.parLevel * 2)) * 100))
                 : null
-              const locName = item.locationId
-                ? locations.find(l => l.id === item.locationId)?.name
-                : null
               return (
                 <button key={item.id} onClick={() => setSelectedItem(item)}
-                  className={`w-full rounded-2xl border px-4 py-3.5 text-left shadow-sm hover:shadow-md active:scale-[0.99] transition-all cursor-pointer ${st.border} ${st.bg}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${st.dot}`} />
-                      <span className="font-medium text-zinc-900 text-sm truncate">{item.name}</span>
-                      {locName && <span className="text-[10px] text-zinc-400 shrink-0">{locName}</span>}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${st.badge}`}>
-                        {STATUS_LABEL[item.status]}
-                      </span>
-                      <span className="text-sm font-bold text-zinc-900">
-                        {item.currentBalance.toFixed(1)}
-                        <span className="text-xs font-normal text-zinc-400 ml-0.5">{item.metric}</span>
-                      </span>
-                    </div>
+                  className={`rounded-xl border p-2.5 text-left shadow-sm hover:shadow-md active:scale-[0.99] transition-all cursor-pointer ${st.border} ${st.bg}`}>
+                  <div className="flex items-center gap-1 mb-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${st.dot}`} />
+                    <span className="font-medium text-zinc-900 text-xs truncate">{item.name}</span>
                   </div>
+                  <p className="text-base font-bold text-zinc-900 leading-none">
+                    {item.currentBalance.toFixed(0)}
+                    <span className="text-[10px] font-normal text-zinc-400 ml-0.5">{item.metric}</span>
+                  </p>
                   {pct !== null && (
-                    <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden mb-1">
+                    <div className="h-1 bg-zinc-100 rounded-full overflow-hidden mt-1.5 mb-1">
                       <div className={`h-full rounded-full transition-all ${st.bar}`} style={{ width: `${pct}%` }} />
                     </div>
                   )}
-                  {item.parLevel != null && (
-                    <p className="text-[11px] text-zinc-400">
-                      Par level: {item.parLevel} {item.metric}
-                    </p>
-                  )}
+                  <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded-full font-medium ${st.badge}`}>
+                    {STATUS_LABEL[item.status]}
+                  </span>
                 </button>
               )
             })}

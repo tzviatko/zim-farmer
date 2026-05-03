@@ -5,7 +5,7 @@ import { useEffect } from 'react'
 interface Props {
   open: boolean
   onClose: () => void
-  title: string
+  title: string | React.ReactNode
   children: React.ReactNode
   minContentHeight?: string
 }
