@@ -47,20 +47,46 @@ export async function seedTestData() {
 
   // ── Cattle ───────────────────────────────────────────────────────────────────
   if (await isEmpty('cattle')) {
-    const cattleData = [
-      { tag: '0001', gender: 'F', isBull: false, breed: 'Brahman',  paddockId: north.id, dob: '2019-03-15', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 5,    group: 'A' },
-      { tag: '0002', gender: 'M', isBull: true,  breed: 'Hereford', paddockId: south.id, dob: '2018-07-22', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 18,   group: 'A' },
-      { tag: '0003', gender: 'F', isBull: false, breed: 'Nguni',    paddockId: north.id, dob: '2020-01-10', status: 'in_calf', owner: 'Tsinda - Cornelia', dippedDaysAgo: 3,    group: 'B' },
-      { tag: '0004', gender: 'F', isBull: false, breed: 'Brahman',  paddockId: river.id, dob: '2022-09-05', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 25,   group: 'A' },
-      { tag: '0005', gender: 'M', isBull: false, breed: 'Angus',    paddockId: river.id, dob: '2022-11-20', status: 'active',  owner: 'Tsinda - Other',    dippedDaysAgo: 12,   group: 'B' },
-      { tag: '0006', gender: 'F', isBull: false, breed: 'Nguni',    paddockId: home.id,  dob: '2019-06-18', status: 'in_calf', owner: 'Amaval',            dippedDaysAgo: 8,    group: 'A' },
-      { tag: '0007', gender: 'M', isBull: true,  breed: 'Brahman',  paddockId: south.id, dob: '2017-04-30', status: 'active',  owner: 'Tsinda - Cornelia', dippedDaysAgo: null, group: 'A' },
-      { tag: '0008', gender: 'F', isBull: false, breed: 'Hereford', paddockId: home.id,  dob: '2023-02-14', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 30,   group: 'B' },
-      { tag: '0009', gender: 'M', isBull: false, breed: 'Nguni',    paddockId: north.id, dob: '2023-05-07', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 7,    group: 'B' },
-      { tag: '0010', gender: 'F', isBull: false, breed: 'Angus',    paddockId: south.id, dob: '2020-08-12', status: 'active',  owner: 'Tsinda - Cornelia', dippedDaysAgo: 16,   group: 'A' },
-      { tag: '0011', gender: 'F', isBull: false, breed: 'Brahman',  paddockId: north.id, dob: '2021-04-02', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 6,    group: 'A' },
-      { tag: '0012', gender: 'F', isBull: false, breed: 'Nguni',    paddockId: river.id, dob: '2024-01-15', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 9,    group: 'B' },
-    ] as const
+    const cattlePaddocks = [north.id, south.id, river.id, home.id]
+    const cattleBreeds = ['Brahman', 'Nguni', 'Hereford', 'Angus', 'Simmental']
+    const cattleOwners = ['Amaval', 'Tsinda - Cornelia', 'Tsinda - Other'] as const
+    const cattleDobs = [
+      '2017-03-12', '2017-08-25', '2018-01-14', '2018-05-30', '2018-09-07',
+      '2019-02-18', '2019-07-04', '2019-11-22', '2020-03-09', '2020-06-15',
+      '2020-10-28', '2021-01-20', '2021-04-14', '2021-08-03', '2021-12-17',
+      '2022-02-08', '2022-06-21', '2022-10-05', '2023-01-30', '2023-05-16',
+      '2023-09-11', '2024-02-28', '2024-06-19', '2024-10-03', '2024-12-01',
+    ]
+    const baseData = [
+      { tag: '0001', gender: 'F', isBull: false, breed: 'Brahman',  paddockId: north.id, dob: '2019-03-15', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 5    as number | null, group: 'A' },
+      { tag: '0002', gender: 'M', isBull: true,  breed: 'Hereford', paddockId: south.id, dob: '2018-07-22', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 18   as number | null, group: 'A' },
+      { tag: '0003', gender: 'F', isBull: false, breed: 'Nguni',    paddockId: north.id, dob: '2020-01-10', status: 'in_calf', owner: 'Tsinda - Cornelia', dippedDaysAgo: 3    as number | null, group: 'B' },
+      { tag: '0004', gender: 'F', isBull: false, breed: 'Brahman',  paddockId: river.id, dob: '2022-09-05', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 25   as number | null, group: 'A' },
+      { tag: '0005', gender: 'M', isBull: false, breed: 'Angus',    paddockId: river.id, dob: '2022-11-20', status: 'active',  owner: 'Tsinda - Other',    dippedDaysAgo: 12   as number | null, group: 'B' },
+      { tag: '0006', gender: 'F', isBull: false, breed: 'Nguni',    paddockId: home.id,  dob: '2019-06-18', status: 'in_calf', owner: 'Amaval',            dippedDaysAgo: 8    as number | null, group: 'A' },
+      { tag: '0007', gender: 'M', isBull: true,  breed: 'Brahman',  paddockId: south.id, dob: '2017-04-30', status: 'active',  owner: 'Tsinda - Cornelia', dippedDaysAgo: null as number | null, group: 'A' },
+      { tag: '0008', gender: 'F', isBull: false, breed: 'Hereford', paddockId: home.id,  dob: '2023-02-14', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 30   as number | null, group: 'B' },
+      { tag: '0009', gender: 'M', isBull: false, breed: 'Nguni',    paddockId: north.id, dob: '2023-05-07', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 7    as number | null, group: 'B' },
+      { tag: '0010', gender: 'F', isBull: false, breed: 'Angus',    paddockId: south.id, dob: '2020-08-12', status: 'active',  owner: 'Tsinda - Cornelia', dippedDaysAgo: 16   as number | null, group: 'A' },
+      { tag: '0011', gender: 'F', isBull: false, breed: 'Brahman',  paddockId: north.id, dob: '2021-04-02', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 6    as number | null, group: 'A' },
+      { tag: '0012', gender: 'F', isBull: false, breed: 'Nguni',    paddockId: river.id, dob: '2024-01-15', status: 'active',  owner: 'Amaval',            dippedDaysAgo: 9    as number | null, group: 'B' },
+    ]
+    const extraData = Array.from({ length: 200 }, (_, i) => {
+      const isMale = i % 3 === 0
+      return {
+        tag:          String(i + 13).padStart(4, '0'),
+        gender:       isMale ? 'M' : 'F',
+        isBull:       isMale && i % 21 === 0,
+        breed:        cattleBreeds[i % cattleBreeds.length],
+        paddockId:    cattlePaddocks[i % cattlePaddocks.length],
+        dob:          cattleDobs[i % cattleDobs.length],
+        status:       (!isMale && i % 8 === 0) ? 'in_calf' : 'active',
+        owner:        cattleOwners[i % cattleOwners.length],
+        dippedDaysAgo: (i % 11 === 0 ? null : (i % 45) + 1) as number | null,
+        group:        i % 2 === 0 ? 'A' : 'B',
+      }
+    })
+    const cattleData = [...baseData, ...extraData]
     const sessionId = `batch-${Date.now()}`
     for (const animal of cattleData) {
       const { dippedDaysAgo, ...fields } = animal
@@ -73,7 +99,7 @@ export async function seedTestData() {
         await addDoc(collection(db, 'weight_records'), { animalId: ref.id, date: daysAgo(10), weightKg: 300 + Math.floor(Math.random() * 80), createdAt: now() })
       }
     }
-    console.log('Seeded: cattle')
+    console.log('Seeded: cattle (212 animals)')
   } else {
     console.log('Cattle: skipping (already exists)')
   }
