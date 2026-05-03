@@ -13,6 +13,7 @@ interface Location {
 export default function LocationsPage() {
   const [locations, setLocations] = useState<Location[]>([])
   const [loading, setLoading] = useState(true)
+  const [isOnline, setIsOnline] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
   const [name, setName] = useState('')
   async function load() {
@@ -21,6 +22,15 @@ export default function LocationsPage() {
       .sort((a, b) => a.name.localeCompare(b.name)))
     setLoading(false)
   }
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine)
+    const up = () => setIsOnline(true)
+    const down = () => setIsOnline(false)
+    window.addEventListener('online', up)
+    window.addEventListener('offline', down)
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down) }
+  }, [])
 
   useEffect(() => { load() }, [])
 
@@ -39,17 +49,26 @@ export default function LocationsPage() {
     <div className="min-h-screen bg-[#F5F5F0] font-[family-name:var(--font-syne)] pb-[100px]">
       <header className="sticky top-0 z-40 bg-white border-b border-zinc-100 px-4 py-3.5">
         <div className="max-w-lg mx-auto">
-          <h1 className="text-xl font-bold tracking-tight text-zinc-900">Locations</h1>
-          <p className="text-xs text-zinc-400 mt-0.5">Paddocks, camps, sites</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900">Locations</h1>
+            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#3B6D11]' : 'bg-zinc-400'}`} />
+          </div>
+          <p className="text-xs text-zinc-500 mt-0.5">Paddocks, camps, sites</p>
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
-        <button onClick={() => setAddOpen(true)}
-          className="w-full bg-[#3B6D11] text-white rounded-xl py-3 text-sm font-semibold">
-          + Add Location
-        </button>
+      {!isOnline && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2">
+          <p className="text-xs text-amber-700 text-center max-w-lg mx-auto">Offline — changes are saved locally and will sync when you reconnect.</p>
+        </div>
+      )}
 
+      <button onClick={() => setAddOpen(true)}
+        className="fixed bottom-[106px] right-4 w-14 h-14 bg-[#3B6D11] rounded-full shadow-xl flex items-center justify-center text-white z-30 hover:bg-[#2d5409] active:scale-95 transition-all cursor-pointer">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+
+      <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
         {!loading && locations.length === 0 && (
           <p className="text-center text-sm text-zinc-400 py-8">No locations yet.</p>
         )}

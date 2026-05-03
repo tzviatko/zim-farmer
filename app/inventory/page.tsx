@@ -27,7 +27,6 @@ export default function InventoryPage() {
   const [transactions, setTransactions] = useState<InventoryTransaction[]>([])
   const [locations, setLocations] = useState<Location[]>([])
   const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
 
   // Selected item for detail view
@@ -55,7 +54,7 @@ export default function InventoryPage() {
   }, [])
 
   async function fetchAll(quiet = false) {
-    quiet ? setSyncing(true) : setLoading(true)
+    if (!quiet) setLoading(true)
     try {
       const [itemSnap, txSnap, locSnap] = await Promise.all([
         getDocs(query(collection(db, 'inventory_items'), where('active', '==', true))),
@@ -91,7 +90,6 @@ export default function InventoryPage() {
       console.error('Inventory load failed:', err)
     } finally {
       setLoading(false)
-      setSyncing(false)
     }
   }
 
@@ -201,7 +199,10 @@ export default function InventoryPage() {
       <header className="sticky top-0 z-40 bg-white border-b border-zinc-100 px-4 py-3.5">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-zinc-900">Inventory</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-zinc-900">Inventory</h1>
+              <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#3B6D11]' : 'bg-zinc-400'}`} />
+            </div>
             <p className="text-xs text-zinc-500 mt-0.5">Stock levels · In/Out log</p>
           </div>
           <div className="flex gap-2">
@@ -209,16 +210,13 @@ export default function InventoryPage() {
               className="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-full font-medium cursor-pointer hover:bg-green-100 transition-colors">+ In</button>
             <button onClick={() => openTx('out')}
               className="text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-full font-medium cursor-pointer hover:bg-red-100 transition-colors">− Out</button>
-            <button onClick={() => fetchAll(true)} className="text-zinc-400 hover:text-zinc-600 p-1.5 rounded-lg hover:bg-zinc-100 cursor-pointer">
-              <SyncIcon spinning={syncing} />
-            </button>
           </div>
         </div>
       </header>
 
       {!isOnline && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2">
-          <p className="text-xs text-amber-700 text-center">Offline — changes saved locally.</p>
+          <p className="text-xs text-amber-700 text-center max-w-lg mx-auto">Offline — changes are saved locally and will sync when you reconnect.</p>
         </div>
       )}
 
@@ -397,15 +395,5 @@ export default function InventoryPage() {
         </form>
       </Modal>
     </div>
-  )
-}
-
-function SyncIcon({ spinning }: { spinning: boolean }) {
-  return (
-    <svg className={spinning ? 'animate-spin' : ''} width="18" height="18" viewBox="0 0 24 24"
-      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-      <path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-    </svg>
   )
 }

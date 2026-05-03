@@ -148,18 +148,13 @@ export default function Dashboard() {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white border-b border-zinc-100 px-4 py-3.5">
         <div className="max-w-lg mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight text-zinc-900">ZIM FARMER</h1>
-                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#3B6D11]' : 'bg-zinc-400'}`} />
-              </div>
-              <p className="text-xs text-zinc-500 mt-0.5">Farm overview</p>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-zinc-900">ZIM FARMER</h1>
+              <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#3B6D11]' : 'bg-zinc-400'}`} />
             </div>
+            <p className="text-xs text-zinc-500 mt-0.5">Farm overview</p>
           </div>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isOnline ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-            {isOnline ? 'Online' : 'Offline'}
-          </span>
         </div>
       </header>
 
@@ -206,7 +201,7 @@ export default function Dashboard() {
             alert={null}
           />
           <ModuleCard
-            href="/more"
+            href="/vehicles"
             label="Vehicles"
             icon="🚜"
             primary={loading ? '—' : String(stats!.vehicles)}

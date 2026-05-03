@@ -30,6 +30,7 @@ interface Entry {
 export default function FinancePage() {
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
+  const [isOnline, setIsOnline] = useState(true)
   const [tab, setTab] = useState<Tab>('summary')
   const [addOpen, setAddOpen] = useState<'revenue' | 'expense' | null>(null)
   const [monthFilter, setMonthFilter] = useState<string>(() => new Date().toISOString().slice(0, 7))
@@ -57,6 +58,15 @@ export default function FinancePage() {
     setLoading(false)
   }
 
+  useEffect(() => {
+    setIsOnline(navigator.onLine)
+    const up = () => setIsOnline(true)
+    const down = () => setIsOnline(false)
+    window.addEventListener('online', up)
+    window.addEventListener('offline', down)
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down) }
+  }, [])
+
   useEffect(() => { load() }, [])
 
   const filtered = entries.filter(e => e.date.startsWith(monthFilter))
@@ -76,10 +86,19 @@ export default function FinancePage() {
     <div className="min-h-screen bg-[#F5F5F0] font-[family-name:var(--font-syne)] pb-[100px]">
       <header className="sticky top-0 z-40 bg-white border-b border-zinc-100 px-4 py-3.5">
         <div className="max-w-lg mx-auto">
-          <h1 className="text-xl font-bold tracking-tight text-zinc-900">Finance</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900">Finance</h1>
+            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#3B6D11]' : 'bg-zinc-400'}`} />
+          </div>
           <p className="text-xs text-zinc-500 mt-0.5">Revenue & expenses</p>
         </div>
       </header>
+
+      {!isOnline && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2">
+          <p className="text-xs text-amber-700 text-center max-w-lg mx-auto">Offline — changes are saved locally and will sync when you reconnect.</p>
+        </div>
+      )}
 
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
 
