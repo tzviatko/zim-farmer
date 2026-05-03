@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { getDipStatus, computeNextServiceMileage, getServiceStatus } from '../lib/types'
-import { seedTestData } from '../lib/seed'
+import { seedTestData, clearAndReseedCattle } from '../lib/seed'
 import { prefetchAllCollections } from '../lib/prefetch'
 
 type Stats = {
@@ -288,6 +288,17 @@ export default function Dashboard() {
             </button>
           </div>
         )}
+        <div className="text-center mt-2 pb-4">
+          <button
+            onClick={async () => {
+              if (!confirm('This will delete all cattle, dip records, and weight records, then reseed 212 animals. Continue?')) return
+              await clearAndReseedCattle()
+              window.location.reload()
+            }}
+            className="text-xs text-amber-400 underline">
+            Clear &amp; reseed cattle
+          </button>
+        </div>
       </div>
     </div>
   )
