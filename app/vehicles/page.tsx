@@ -241,19 +241,19 @@ export default function VehiclesPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-semibold text-zinc-900 text-sm">{v.yearMakeModel}</p>
-                  <p className="text-xs text-zinc-400 mt-0.5">{[v.engine, v.locationName].filter(Boolean).join(' · ')}</p>
+                  <p className="text-xs text-zinc-600 mt-0.5">{[v.engine, v.locationName].filter(Boolean).join(' · ')}</p>
                 </div>
                 <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_CLASS[v.serviceStatus]}`}>
                   {STATUS_LABEL[v.serviceStatus]}
                 </span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3">
-                <div className="bg-zinc-50 rounded-xl px-3 py-2">
-                  <p className="text-xs text-zinc-400">Current km</p>
+                <div className="bg-white border border-zinc-200 rounded-xl px-3 py-2">
+                  <p className="text-xs text-zinc-600">Current km</p>
                   <p className="text-base font-bold text-zinc-900">{v.currentMileage.toLocaleString()}</p>
                 </div>
-                <div className="bg-zinc-50 rounded-xl px-3 py-2">
-                  <p className="text-xs text-zinc-400">Next service</p>
+                <div className="bg-white border border-zinc-200 rounded-xl px-3 py-2">
+                  <p className="text-xs text-zinc-600">Next service</p>
                   <p className="text-base font-bold text-zinc-900">{v.nextServiceMileage.toLocaleString()}</p>
                 </div>
               </div>
@@ -301,9 +301,9 @@ export default function VehiclesPage() {
                   <div key={l.id} className="flex items-center justify-between py-2 border-b border-zinc-50">
                     <div>
                       <p className="text-sm font-medium text-zinc-900">{l.recordedMileage.toLocaleString()} km</p>
-                      {l.notes && <p className="text-xs text-zinc-400">{l.notes}</p>}
+                      {l.notes && <p className="text-xs text-zinc-600">{l.notes}</p>}
                     </div>
-                    <span className="text-xs text-zinc-400">{l.date}</span>
+                    <span className="text-xs text-zinc-600">{l.date}</span>
                   </div>
                 ))}
               </div>
@@ -313,13 +313,13 @@ export default function VehiclesPage() {
               vehicleMaintenance.length === 0 ? <p className="text-sm text-zinc-400 text-center py-6">No maintenance recorded.</p> :
               <div className="space-y-2">
                 {vehicleMaintenance.slice(0, 10).map(m => (
-                  <div key={m.id} className="bg-zinc-50 rounded-xl px-3 py-2.5">
+                  <div key={m.id} className="bg-white border border-zinc-200 rounded-xl px-3 py-2.5">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-medium text-zinc-900">{m.serviceType}</span>
-                      <span className="text-xs text-zinc-400">{m.serviceDate}</span>
+                      <span className="text-xs text-zinc-600">{m.serviceDate}</span>
                     </div>
-                    {m.recordedMileage && <p className="text-xs text-zinc-500 mt-0.5">{m.recordedMileage.toLocaleString()} km</p>}
-                    {m.notes && <p className="text-xs text-zinc-400">{m.notes}</p>}
+                    {m.recordedMileage && <p className="text-xs text-zinc-600 mt-0.5">{m.recordedMileage.toLocaleString()} km</p>}
+                    {m.notes && <p className="text-xs text-zinc-600">{m.notes}</p>}
                   </div>
                 ))}
               </div>

@@ -5,6 +5,18 @@ import { collection, getDocs, addDoc, Timestamp } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import Modal from '../../components/Modal'
 import { RevenueEntry, ExpenseEntry } from '../../lib/types'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+
+const PIE_COLORS = ['#dc2626', '#ea580c', '#d97706', '#ca8a04', '#65a30d', '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#db2777', '#64748b']
+
+function MinimalTooltip({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-zinc-200 rounded-lg px-2 py-1 text-xs text-zinc-700 shadow-sm">
+      {payload[0].name}: ${payload[0].value.toLocaleString()}
+    </div>
+  )
+}
 
 type Tab = 'summary' | 'revenue' | 'expenses'
 
@@ -33,6 +45,12 @@ export default function FinancePage() {
   const [isOnline, setIsOnline] = useState(true)
   const [tab, setTab] = useState<Tab>('summary')
   const [addOpen, setAddOpen] = useState<'revenue' | 'expense' | null>(null)
+  const [expCatFilter, setExpCatFilter] = useState<string | null>(null)
+  const [isPointerDevice, setIsPointerDevice] = useState(false)
+
+  useEffect(() => {
+    setIsPointerDevice(window.matchMedia('(hover: hover)').matches)
+  }, [])
   const [monthFilter, setMonthFilter] = useState<string>(() => new Date().toISOString().slice(0, 7))
   function shiftMonth(delta: number) {
     const [y, m] = monthFilter.split('-').map(Number)
@@ -121,17 +139,17 @@ export default function FinancePage() {
           </button>
         </div>
 
-        {/* P&L cards */}
+        {/* P&L cards — border style */}
         <div className="grid grid-cols-3 gap-2">
-          <div className="bg-green-50 rounded-xl border border-green-100 p-3 text-center">
-            <p className="text-base font-bold text-green-800">${totalRevenue.toLocaleString()}</p>
+          <div className="bg-white rounded-xl border border-green-200 p-3 text-center">
+            <p className="text-base font-bold text-green-700">${totalRevenue.toLocaleString()}</p>
             <p className="text-xs text-green-600 mt-0.5">Revenue</p>
           </div>
-          <div className="bg-red-50 rounded-xl border border-red-100 p-3 text-center">
-            <p className="text-base font-bold text-red-800">${totalExpenses.toLocaleString()}</p>
-            <p className="text-xs text-red-600 mt-0.5">Expenses</p>
+          <div className="bg-white rounded-xl border border-red-200 p-3 text-center">
+            <p className="text-base font-bold text-red-600">${totalExpenses.toLocaleString()}</p>
+            <p className="text-xs text-red-500 mt-0.5">Expenses</p>
           </div>
-          <div className={`rounded-xl border p-3 text-center ${netProfit >= 0 ? 'bg-[#3B6D11]/5 border-[#3B6D11]/20' : 'bg-amber-50 border-amber-100'}`}>
+          <div className={`bg-white rounded-xl border p-3 text-center ${netProfit >= 0 ? 'border-[#3B6D11]' : 'border-amber-300'}`}>
             <p className={`text-base font-bold ${netProfit >= 0 ? 'text-[#3B6D11]' : 'text-amber-700'}`}>
               {netProfit >= 0 ? '+' : ''}${netProfit.toLocaleString()}
             </p>
@@ -157,30 +175,75 @@ export default function FinancePage() {
             )}
             {sortedExpCats.length > 0 && (
               <div className="bg-white rounded-2xl border border-zinc-100 p-4">
-                <p className="text-xs text-zinc-400 uppercase tracking-widest mb-3">Expense breakdown</p>
-                <div className="space-y-2">
-                  {sortedExpCats.map(([cat, amt]) => (
-                    <div key={cat}>
-                      <div className="flex items-center justify-between text-sm mb-1">
-                        <span className="text-zinc-700">{cat}</span>
-                        <span className="font-medium text-zinc-900">${amt.toLocaleString()}</span>
-                      </div>
-                      <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-red-400 rounded-full transition-all"
-                          style={{ width: `${totalExpenses > 0 ? (amt / totalExpenses) * 100 : 0}%` }} />
-                      </div>
-                    </div>
-                  ))}
+                <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Expense breakdown</p>
+                <div className="flex items-center gap-3">
+                  <div style={{ height: 120, width: 120, flexShrink: 0 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={sortedExpCats.map(([name, value]) => ({ name, value }))}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={32}
+                          outerRadius={55}
+                          cursor="pointer"
+                          isAnimationActive={false}
+                          onClick={(entry) => {
+                            const name = entry.name as string | undefined
+                            if (!name) return
+                            setExpCatFilter(prev => prev === name ? null : name)
+                          }}
+                        >
+                          {sortedExpCats.map(([cat], i) => (
+                            <Cell
+                              key={i}
+                              fill={PIE_COLORS[i % PIE_COLORS.length]}
+                              opacity={expCatFilter && expCatFilter !== cat ? 0.3 : 1}
+                              stroke={expCatFilter === cat ? '#111' : 'none'}
+                              strokeWidth={2}
+                            />
+                          ))}
+                        </Pie>
+                        {isPointerDevice && <Tooltip content={<MinimalTooltip />} />}
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex-1 space-y-1.5 min-w-0">
+                    {sortedExpCats.map(([cat, amt], i) => (
+                      <button
+                        key={cat}
+                        onClick={() => setExpCatFilter(prev => prev === cat ? null : cat)}
+                        className={`flex items-center gap-2 w-full text-left transition-opacity cursor-pointer ${
+                          expCatFilter && expCatFilter !== cat ? 'opacity-40' : ''
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                        <span className="text-[10px] text-zinc-600 truncate flex-1">{cat}</span>
+                        <span className="text-[10px] font-medium text-zinc-900">${amt.toLocaleString()}</span>
+                      </button>
+                    ))}
+                    {expCatFilter && (
+                      <button onClick={() => setExpCatFilter(null)}
+                        className="text-[10px] text-zinc-400 underline cursor-pointer mt-1">
+                        Clear filter
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
 
             {/* Recent entries */}
             <div className="bg-white rounded-2xl border border-zinc-100 p-4">
-              <p className="text-xs text-zinc-400 uppercase tracking-widest mb-3">Recent transactions</p>
-              {filtered.slice(0, 10).map(e => (
-                <EntryRow key={e.id} entry={e} />
-              ))}
+              <p className="text-xs text-zinc-500 uppercase tracking-widest mb-3">Recent transactions</p>
+              {filtered
+                .filter(e => !expCatFilter || (e.type === 'expense' && e.category === expCatFilter))
+                .slice(0, 10)
+                .map(e => (
+                  <EntryRow key={e.id} entry={e} />
+                ))}
               {filtered.length === 0 && <p className="text-sm text-zinc-400 text-center py-2">None this period.</p>}
             </div>
           </div>

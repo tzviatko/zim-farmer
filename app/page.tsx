@@ -9,9 +9,9 @@ import { seedTestData, clearAndReseedCattle } from '../lib/seed'
 import { prefetchAllCollections } from '../lib/prefetch'
 
 type Stats = {
-  livestock: number       // active + in_calf + sick only
+  livestock: number
   dipOverdue: number
-  inputsTotal: number     // total inventory items
+  inputsTotal: number
   inputsLowStock: number
   staff: number
   staffSalaryTotal: number
@@ -19,10 +19,7 @@ type Stats = {
   vehicleServiceNeeded: number
   equipmentTotal: number
   equipmentInUse: number
-  financeNetProfit: number
-  financeExpenses: number
   cropTypes: number
-  locations: number
 }
 
 function daysUntilFirst(): number {
@@ -58,7 +55,7 @@ export default function Dashboard() {
         const [
           cattleSnap, staffSnap, inventorySnap, txSnap,
           vehicleSnap, equipmentSnap, equipUseSnap,
-          revenueSnap, expenseSnap, cropsSnap, paddocksSnap,
+          cropsSnap,
           dipSnap, mileageSnap, maintenanceSnap,
         ] = await Promise.all([
           getDocs(query(collection(db, 'cattle'), where('active', '==', true))),
@@ -68,16 +65,12 @@ export default function Dashboard() {
           getDocs(query(collection(db, 'vehicles'), where('active', '==', true))),
           getDocs(query(collection(db, 'equipment'), where('active', '==', true))),
           getDocs(collection(db, 'equipment_use_log')),
-          getDocs(collection(db, 'revenue_entries')),
-          getDocs(collection(db, 'expense_entries')),
           getDocs(collection(db, 'crops')),
-          getDocs(collection(db, 'paddocks')),
           getDocs(collection(db, 'dip_records')),
           getDocs(collection(db, 'mileage_logs')),
           getDocs(collection(db, 'maintenance_records')),
         ])
 
-        // Livestock: exclude sold, lost, deceased
         const ARCHIVED_STATUSES = new Set(['sold', 'lost', 'deceased'])
         let livestock = 0
         cattleSnap.docs.forEach(d => {
@@ -85,7 +78,6 @@ export default function Dashboard() {
           if (!ARCHIVED_STATUSES.has(status)) livestock++
         })
 
-        // Dip overdue count
         const lastDipMap = new Map<string, string>()
         dipSnap.docs.forEach(d => {
           const data = d.data()
@@ -101,7 +93,6 @@ export default function Dashboard() {
           if (getDipStatus(lastDip) === 'overdue') dipOverdue++
         })
 
-        // Vehicle service needed
         const vehicleMileageMap = new Map<string, number>()
         mileageSnap.docs.forEach(d => {
           const data = d.data()
@@ -132,7 +123,6 @@ export default function Dashboard() {
           if (status === 'overdue' || status === 'soon') vehicleServiceNeeded++
         })
 
-        // Inputs
         const balanceMap = new Map<string, number>()
         txSnap.docs.forEach(d => {
           const data = d.data()
@@ -146,31 +136,17 @@ export default function Dashboard() {
           if ((balanceMap.get(d.id) ?? 0) <= parLevel) inputsLowStock++
         })
 
-        // Staff salary total
         let staffSalaryTotal = 0
         staffSnap.docs.forEach(d => {
           staffSalaryTotal += (d.data().salary as number | null) ?? 0
         })
 
-        // Equipment in use (open checkout — no returnTime)
         const inUseSet = new Set<string>()
         equipUseSnap.docs.forEach(d => {
           const data = d.data()
           if (!data.returnTime) inUseSet.add(data.equipmentId as string)
         })
 
-        // Finance this month
-        let revenue = 0, expenses = 0
-        revenueSnap.docs.forEach(d => {
-          const date = d.data().date as string
-          if (date?.startsWith(monthPrefix)) revenue += (d.data().amount as number) ?? 0
-        })
-        expenseSnap.docs.forEach(d => {
-          const date = d.data().date as string
-          if (date?.startsWith(monthPrefix)) expenses += (d.data().amount as number) ?? 0
-        })
-
-        // Crop types (distinct type field from crops collection)
         const cropTypeSet = new Set<string>()
         cropsSnap.docs.forEach(d => {
           const t = d.data().type as string | undefined
@@ -188,10 +164,7 @@ export default function Dashboard() {
           vehicleServiceNeeded,
           equipmentTotal: equipmentSnap.size,
           equipmentInUse: inUseSet.size,
-          financeNetProfit: revenue - expenses,
-          financeExpenses: expenses,
           cropTypes: cropTypeSet.size,
-          locations: paddocksSnap.size,
         })
 
         prefetchAllCollections().catch(() => {})
@@ -229,58 +202,42 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="max-w-lg mx-auto px-4 pt-4">
+      <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
+        {/* Primary stat cards — 6 items */}
         <div className="grid grid-cols-2 gap-3">
-
-          <ModuleCard href="/livestock" label="Livestock" icon="🐄"
+          <StatCard href="/livestock" label="Livestock" icon="🐄"
             primary={loading ? '—' : String(stats!.livestock)}
-            alert={!loading && stats!.dipOverdue > 0
-              ? `${stats!.dipOverdue} dip overdue`
-              : null} />
+            alert={!loading && stats!.dipOverdue > 0 ? `${stats!.dipOverdue} dip overdue` : null} />
 
-          <ModuleCard href="/inventory" label="Inputs" icon="📦"
+          <StatCard href="/inventory" label="Inputs" icon="📦"
             primary={loading ? '—' : String(stats!.inputsTotal)}
-            alert={!loading && stats!.inputsLowStock > 0
-              ? `${stats!.inputsLowStock} low stock`
-              : null} />
+            alert={!loading && stats!.inputsLowStock > 0 ? `${stats!.inputsLowStock} low stock` : null} />
 
-          <ModuleCard href="/hr" label="Staff" icon="👷"
+          <StatCard href="/hr" label="Staff" icon="👷"
             primary={loading ? '—' : String(stats!.staff)}
-            alert={!loading && stats!.staff > 0
-              ? `${fmt$(stats!.staffSalaryTotal)} due in ${daysLeft}d`
-              : null} />
+            alert={!loading && stats!.staff > 0 ? `${fmt$(stats!.staffSalaryTotal)} due in ${daysLeft}d` : null} />
 
-          <ModuleCard href="/vehicles" label="Vehicles" icon="🚜"
+          <StatCard href="/vehicles" label="Vehicles" icon="🚜"
             primary={loading ? '—' : String(stats!.vehicles)}
-            alert={!loading && stats!.vehicleServiceNeeded > 0
-              ? `${stats!.vehicleServiceNeeded} need service`
-              : null} />
+            alert={!loading && stats!.vehicleServiceNeeded > 0 ? `${stats!.vehicleServiceNeeded} need service` : null} />
 
-          <ModuleCard href="/equipment" label="Equipment" icon="🔧"
+          <StatCard href="/equipment" label="Equipment" icon="🔧"
             primary={loading ? '—' : String(stats!.equipmentTotal)}
-            alert={!loading && stats!.equipmentInUse > 0
-              ? `${stats!.equipmentInUse} in use`
-              : null} />
+            alert={!loading && stats!.equipmentInUse > 0 ? `${stats!.equipmentInUse} in use` : null} />
 
-          <ModuleCard href="/finance" label="Finance" icon="💰"
-            primary={loading ? '—' : (stats!.financeNetProfit < 0 ? `-${fmt$(stats!.financeNetProfit)}` : fmt$(stats!.financeNetProfit))}
-            primaryColor={!loading ? (stats!.financeNetProfit < 0 ? 'text-red-600' : 'text-[#3B6D11]') : undefined}
-            alert={!loading && stats!.financeExpenses > 0
-              ? `${fmt$(stats!.financeExpenses)} expenses`
-              : null} />
-
-          <ModuleCard href="/crops" label="Crops" icon="🌾"
+          <StatCard href="/crops" label="Crops" icon="🌾"
             primary={loading ? '—' : String(stats!.cropTypes)}
             alert={null} />
+        </div>
 
-          <ModuleCard href="/locations" label="Locations" icon="📍"
-            primary={loading ? '—' : String(stats!.locations)}
-            alert={null} />
-
+        {/* Plain navigation cards — Finance & Settings */}
+        <div className="grid grid-cols-2 gap-3">
+          <NavCard href="/finance" label="Finance" icon="💰" />
+          <NavCard href="/settings" label="Settings" icon="⚙️" />
         </div>
 
         {process.env.NODE_ENV === 'development' && (
-          <div className="text-center mt-4 pb-2">
+          <div className="text-center pb-2">
             <button
               onClick={async () => { await seedTestData(); window.location.reload() }}
               className="text-xs text-zinc-300 underline">
@@ -304,15 +261,14 @@ export default function Dashboard() {
   )
 }
 
-function ModuleCard({
-  href, label, icon, primary, alert, primaryColor,
+function StatCard({
+  href, label, icon, primary, alert,
 }: {
   href: string
   label: string
   icon: string
   primary: string
   alert: string | null
-  primaryColor?: string
 }) {
   return (
     <Link href={href}
@@ -325,8 +281,18 @@ function ModuleCard({
           </span>
         )}
       </div>
-      <p className="text-xs text-zinc-400 mb-0.5">{label}</p>
-      <p className={`text-2xl font-bold ${primaryColor ?? 'text-zinc-900'}`}>{primary}</p>
+      <p className="text-xs text-zinc-500 mb-0.5">{label}</p>
+      <p className="text-2xl font-bold text-zinc-900">{primary}</p>
+    </Link>
+  )
+}
+
+function NavCard({ href, label, icon }: { href: string; label: string; icon: string }) {
+  return (
+    <Link href={href}
+      className="bg-white rounded-2xl border border-zinc-100 p-4 shadow-sm hover:shadow-md hover:border-zinc-300 transition-all flex items-center gap-3">
+      <span className="text-2xl">{icon}</span>
+      <span className="text-sm font-semibold text-zinc-700">{label}</span>
     </Link>
   )
 }

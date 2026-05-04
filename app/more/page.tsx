@@ -29,10 +29,10 @@ const modules = [
     desc: 'Planting, harvests, paddock records',
   },
   {
-    href: '/locations',
-    label: 'Locations',
-    icon: '📍',
-    desc: 'Paddocks, camps, sites',
+    href: '/settings',
+    label: 'Settings',
+    icon: '⚙️',
+    desc: 'Locations, Breeds, Groups, Owners',
   },
 ]
 
@@ -56,7 +56,7 @@ export default function MorePage() {
             <h1 className="text-xl font-bold tracking-tight text-zinc-900">More</h1>
             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#3B6D11]' : 'bg-zinc-400'}`} />
           </div>
-          <p className="text-xs text-zinc-500 mt-0.5">Vehicles · Equipment · Finance · Crops · Locations</p>
+          <p className="text-xs text-zinc-500 mt-0.5">Vehicles · Equipment · Finance · Crops · Settings</p>
         </div>
       </header>
 

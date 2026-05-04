@@ -27,7 +27,7 @@ export default function Modal({ open, onClose, title, children, minContentHeight
     >
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[88vh] sm:max-h-[92vh] overflow-y-auto flex flex-col">
         <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between sticky top-0 bg-white z-10">
-          <h2 className="font-semibold text-sm text-zinc-900">{title}</h2>
+          <h2 className="font-[family-name:var(--font-dm-mono)] uppercase tracking-widest text-xs font-bold text-zinc-900">{title}</h2>
           <button
             onClick={onClose}
             className="text-zinc-400 hover:text-zinc-700 w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-100 text-xl leading-none cursor-pointer"

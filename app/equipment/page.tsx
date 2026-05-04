@@ -208,7 +208,7 @@ export default function EquipmentPage() {
                       <span className="font-medium text-zinc-900 text-sm">{e.name}</span>
                       {e.type && <span className="text-[10px] bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">{e.type}</span>}
                     </div>
-                    <p className="text-xs text-zinc-400 mt-0.5">{[locationMap.get(e.locationId ?? '') ?? null, e.quantity ? `Qty: ${e.quantity}` : null].filter(Boolean).join(' · ')}</p>
+                    <p className="text-xs text-zinc-600 mt-0.5">{[locationMap.get(e.locationId ?? '') ?? null, e.quantity ? `Qty: ${e.quantity}` : null].filter(Boolean).join(' · ')}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     {isInUse && <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">In Use</span>}
@@ -233,8 +233,8 @@ export default function EquipmentPage() {
         {selectedEquipment && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-2">
-              {selectedEquipment.condition && <div className="bg-zinc-50 rounded-xl p-3 text-center"><p className={`text-xs font-medium ${COND_CLASS[selectedEquipment.condition]}`}>{selectedEquipment.condition}</p><p className="text-[10px] text-zinc-400 mt-0.5">Condition</p></div>}
-              {selectedEquipment.status && <div className="bg-zinc-50 rounded-xl p-3 text-center"><p className="text-xs font-medium text-zinc-700">{selectedEquipment.status}</p><p className="text-[10px] text-zinc-400 mt-0.5">Status</p></div>}
+              {selectedEquipment.condition && <div className="bg-white border border-zinc-200 rounded-xl p-3 text-center"><p className={`text-xs font-medium ${COND_CLASS[selectedEquipment.condition]}`}>{selectedEquipment.condition}</p><p className="text-[10px] text-zinc-600 mt-0.5">Condition</p></div>}
+              {selectedEquipment.status && <div className="bg-white border border-zinc-200 rounded-xl p-3 text-center"><p className="text-xs font-medium text-zinc-700">{selectedEquipment.status}</p><p className="text-[10px] text-zinc-600 mt-0.5">Status</p></div>}
             </div>
             {selectedEquipment.description && <p className="text-sm text-zinc-600">{selectedEquipment.description}</p>}
 
@@ -248,12 +248,12 @@ export default function EquipmentPage() {
             <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Usage Log</p>
             {equipmentLogs.length === 0 ? <p className="text-sm text-zinc-400 text-center py-4">No usage recorded.</p> :
               equipmentLogs.slice(0, 10).map(l => (
-                <div key={l.id} className="bg-zinc-50 rounded-xl px-3 py-2.5 space-y-1">
+                <div key={l.id} className="bg-white border border-zinc-200 rounded-xl px-3 py-2.5 space-y-1">
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-zinc-900">{l.reasonForUse ?? 'Used'}</span>
-                    <span className="text-xs text-zinc-400">{l.date}</span>
+                    <span className="text-xs text-zinc-600">{l.date}</span>
                   </div>
-                  {l.givenToId && <p className="text-xs text-zinc-500">Given to: {staffMap.get(l.givenToId) ?? l.givenToId}</p>}
+                  {l.givenToId && <p className="text-xs text-zinc-600">Given to: {staffMap.get(l.givenToId) ?? l.givenToId}</p>}
                   {l.returnTime ? (
                     <p className="text-xs text-green-600">Returned · Condition: {l.returnedCondition}</p>
                   ) : (

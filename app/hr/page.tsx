@@ -155,12 +155,13 @@ export default function HRPage() {
             {staff.map(s => (
               <button key={s.id} onClick={() => openStaff(s)}
                 className="w-full bg-white rounded-2xl border border-zinc-100 p-4 text-left hover:shadow-sm transition-shadow">
-                <div className="flex items-start justify-between">
-                  <div>
+                <div className="flex items-center gap-3">
+                  <StaffAvatar name={s.fullName} photoUrl={s.photoUrl} size={40} />
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-zinc-900">{s.fullName}</p>
                     <p className="text-xs text-zinc-500 mt-0.5">{s.role ?? 'No role set'}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     {s.salary != null && (
                       <p className="text-sm font-bold text-zinc-900">${s.salary.toLocaleString()}<span className="text-xs font-normal text-zinc-400">/mo</span></p>
                     )}
@@ -226,7 +227,17 @@ export default function HRPage() {
 
       {/* Staff Detail Modal */}
       {selectedStaff && (
-        <Modal open title={selectedStaff.fullName} onClose={() => setSelectedStaff(null)} minContentHeight="360px">
+        <Modal open title="" onClose={() => setSelectedStaff(null)} minContentHeight="360px">
+          {/* Header with avatar */}
+          <div className="flex items-center gap-3 mb-4 -mt-1">
+            <StaffAvatar name={selectedStaff.fullName} photoUrl={selectedStaff.photoUrl} size={64} />
+            <div>
+              <p className="font-[family-name:var(--font-dm-mono)] uppercase tracking-widest text-xs font-bold text-zinc-900 leading-tight">
+                {selectedStaff.fullName}
+              </p>
+              {selectedStaff.role && <p className="text-xs text-zinc-500 mt-0.5">{selectedStaff.role}</p>}
+            </div>
+          </div>
           {/* Sub-tabs */}
           <div className="flex gap-1 bg-zinc-50 rounded-xl p-1 mb-4">
             {([['info', 'Info'], ['salary', 'Salary'], ['loans', 'Loans'], ['safety', 'Safety']] as [StaffTab, string][]).map(([t, label]) => (
@@ -491,6 +502,7 @@ function AddStaffModal({ open, onClose, onSaved }: {
     fullName: '', idNumber: '', role: '', dateStarted: '', salary: '',
     dob: '', address: '', phone: '',
     emergencyContactName: '', emergencyContactRelation: '', emergencyContactPhone: '',
+    photoUrl: '',
   }
   const [form, setForm] = useState(empty)
   function set(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
@@ -509,6 +521,7 @@ function AddStaffModal({ open, onClose, onSaved }: {
       emergencyContactName: form.emergencyContactName.trim() || null,
       emergencyContactRelation: form.emergencyContactRelation.trim() || null,
       emergencyContactPhone: form.emergencyContactPhone.trim() || null,
+      photoUrl: form.photoUrl.trim() || null,
       active: true,
       createdAt: Timestamp.now().toDate().toISOString(),
     }).catch(console.error)
@@ -542,6 +555,7 @@ function EditStaffModal({ open, staff, onClose, onSaved }: {
     emergencyContactName: staff.emergencyContactName ?? '',
     emergencyContactRelation: staff.emergencyContactRelation ?? '',
     emergencyContactPhone: staff.emergencyContactPhone ?? '',
+    photoUrl: staff.photoUrl ?? '',
   })
   useEffect(() => {
     setForm({
@@ -556,6 +570,7 @@ function EditStaffModal({ open, staff, onClose, onSaved }: {
       emergencyContactName: staff.emergencyContactName ?? '',
       emergencyContactRelation: staff.emergencyContactRelation ?? '',
       emergencyContactPhone: staff.emergencyContactPhone ?? '',
+      photoUrl: staff.photoUrl ?? '',
     })
   }, [staff.id])
 
@@ -575,6 +590,7 @@ function EditStaffModal({ open, staff, onClose, onSaved }: {
       emergencyContactName: form.emergencyContactName.trim() || null,
       emergencyContactRelation: form.emergencyContactRelation.trim() || null,
       emergencyContactPhone: form.emergencyContactPhone.trim() || null,
+      photoUrl: form.photoUrl.trim() || null,
     }).catch(console.error)
     onSaved()
   }
@@ -615,6 +631,22 @@ function StaffForm({ form, set }: { form: Record<string, string>; set: (k: strin
       <Field label="Name" value={form.emergencyContactName} onChange={v => set('emergencyContactName', v)} />
       <Field label="Relation" value={form.emergencyContactRelation} onChange={v => set('emergencyContactRelation', v)} />
       <Field label="Phone" value={form.emergencyContactPhone} onChange={v => set('emergencyContactPhone', v)} />
+      <p className="text-xs text-zinc-400 uppercase tracking-widest pt-1">Profile</p>
+      <Field label="Photo URL (optional)" value={form.photoUrl} onChange={v => set('photoUrl', v)} />
+    </div>
+  )
+}
+
+function StaffAvatar({ name, photoUrl, size }: { name: string; photoUrl: string | null | undefined; size: number }) {
+  const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  return (
+    <div style={{ width: size, height: size }}
+      className="rounded-full overflow-hidden bg-[#3B6D11]/10 flex items-center justify-center shrink-0">
+      {photoUrl ? (
+        <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
+      ) : (
+        <span className="font-bold text-[#3B6D11]" style={{ fontSize: size * 0.35 }}>{initials}</span>
+      )}
     </div>
   )
 }

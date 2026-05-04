@@ -95,6 +95,21 @@ export interface Location {
   name: string
 }
 
+export interface Breed {
+  id: string
+  name: string
+}
+
+export interface Group {
+  id: string
+  name: string
+}
+
+export interface Owner {
+  id: string
+  name: string
+}
+
 // ── Inventory ─────────────────────────────────────────────────────────────────
 
 export type InventoryMetric = 'kg' | 'L' | 'units'
@@ -243,6 +258,7 @@ export interface StaffMember {
   emergencyContactName: string | null
   emergencyContactRelation: string | null
   emergencyContactPhone: string | null
+  photoUrl: string | null
   active: boolean
   createdAt: string
 }

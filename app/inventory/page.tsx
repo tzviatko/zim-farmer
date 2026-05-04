@@ -6,9 +6,20 @@ import { db } from '../../lib/firebase'
 import Modal from '../../components/Modal'
 import { InventoryItem, InventoryTransaction, InventoryMetric, computeBalance } from '../../lib/types'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  PieChart, Pie, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   ResponsiveContainer, Cell,
 } from 'recharts'
+
+const PIE_COLORS = ['#3B6D11', '#5a9a1a', '#7ec850', '#a8e07a', '#c8edaa', '#e0f5cc']
+
+function MinimalTooltip({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-zinc-200 rounded-lg px-2 py-1 text-xs text-zinc-700 shadow-sm">
+      {payload[0].name}: {payload[0].value}
+    </div>
+  )
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -96,6 +107,11 @@ export default function InventoryPage() {
   // Filters
   const [statFilter, setStatFilter] = useState<StatFilter>(null)
   const [locationFilter, setLocationFilter] = useState<string | null>(null) // location id
+  const [isPointerDevice, setIsPointerDevice] = useState(false)
+
+  useEffect(() => {
+    setIsPointerDevice(window.matchMedia('(hover: hover)').matches)
+  }, [])
 
   // Selected item for detail view
   const [selectedItem, setSelectedItem] = useState<EnrichedItem | null>(null)
@@ -364,37 +380,65 @@ export default function InventoryPage() {
           </button>
         </div>
 
-        {/* ── Location bar chart ── */}
+        {/* ── Location pie chart ── */}
         {!loading && locationChartData.length > 0 && (
           <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4">
-            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-3">Items by Location</p>
-            <div style={{ height: 90 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={locationChartData} margin={{ top: 0, right: 4, bottom: 0, left: -20 }} barSize={18}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f4" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 9 }} />
-                  <YAxis tick={{ fontSize: 9 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="value" radius={[3, 3, 0, 0]} cursor="pointer"
-                    onClick={(entry) => {
-                      const clickedId = entry.id as string | null
-                      setLocationFilter(prev => prev === clickedId ? null : clickedId)
-                    }}>
-                    {locationChartData.map((entry, i) => (
-                      <Cell key={i}
-                        fill={locationFilter === entry.id ? '#1a3d06' : '#3B6D11'}
-                        opacity={locationFilter && locationFilter !== entry.id ? 0.35 : 1} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1">Items by Location</p>
+            <div className="flex items-center gap-4">
+              <div style={{ height: 110, width: 110, flexShrink: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={locationChartData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={30}
+                      outerRadius={50}
+                      cursor="pointer"
+                      isAnimationActive={false}
+                      onClick={(entry) => {
+                        const clickedId = (entry as unknown as { id: string | null }).id
+                        setLocationFilter(prev => prev === clickedId ? null : clickedId)
+                      }}
+                    >
+                      {locationChartData.map((entry, i) => (
+                        <Cell
+                          key={i}
+                          fill={PIE_COLORS[i % PIE_COLORS.length]}
+                          opacity={locationFilter && locationFilter !== entry.id ? 0.3 : 1}
+                          stroke={locationFilter === entry.id ? '#1a3d06' : 'none'}
+                          strokeWidth={2}
+                        />
+                      ))}
+                    </Pie>
+                    {isPointerDevice && <Tooltip content={<MinimalTooltip />} />}
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex-1 space-y-1.5 min-w-0">
+                {locationChartData.map((entry, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setLocationFilter(prev => prev === entry.id ? null : entry.id)}
+                    className={`flex items-center gap-2 w-full text-left transition-opacity cursor-pointer ${
+                      locationFilter && locationFilter !== entry.id ? 'opacity-40' : ''
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    <span className="text-[11px] text-zinc-600 truncate flex-1">{entry.name}</span>
+                    <span className="text-[11px] font-medium text-zinc-900">{entry.value}</span>
+                  </button>
+                ))}
+                {locationFilter && (
+                  <button onClick={() => setLocationFilter(null)}
+                    className="text-[10px] text-zinc-400 underline cursor-pointer mt-1">
+                    Clear filter
+                  </button>
+                )}
+              </div>
             </div>
-            {locationFilter && (
-              <button onClick={() => setLocationFilter(null)}
-                className="mt-1 text-xs text-zinc-400 underline w-full text-center cursor-pointer">
-                Clear location filter
-              </button>
-            )}
           </div>
         )}
 
@@ -416,13 +460,16 @@ export default function InventoryPage() {
               const pct = item.parLevel
                 ? Math.min(100, Math.max(0, (item.currentBalance / (item.parLevel * 2)) * 100))
                 : null
+              const locName = item.locationId ? locations.find(l => l.id === item.locationId)?.name : null
               return (
                 <button key={item.id} onClick={() => setSelectedItem(item)}
                   className={`rounded-xl border p-2.5 text-left shadow-sm hover:shadow-md active:scale-[0.99] transition-all cursor-pointer ${st.border} ${st.bg}`}>
-                  <div className="flex items-center gap-1 mb-1.5">
+                  <div className="flex items-center gap-1 mb-0.5">
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${st.dot}`} />
                     <span className="font-medium text-zinc-900 text-xs truncate">{item.name}</span>
                   </div>
+                  {locName && <p className="text-[9px] text-zinc-400 truncate mb-1 pl-2.5">{locName}</p>}
+                  {!locName && <div className="mb-1" />}
                   <p className="text-base font-bold text-zinc-900 leading-none">
                     {item.currentBalance.toFixed(0)}
                     <span className="text-[10px] font-normal text-zinc-400 ml-0.5">{item.metric}</span>
@@ -506,8 +553,8 @@ export default function InventoryPage() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f4" vertical={false} />
                         <XAxis dataKey="month" tick={{ fontSize: 9 }} />
                         <YAxis tick={{ fontSize: 9 }} />
-                        <Tooltip />
-                        <Bar dataKey="total" fill="#3B6D11" radius={[3, 3, 0, 0]} />
+                        {isPointerDevice && <Tooltip content={<MinimalTooltip />} />}
+                        <Bar dataKey="total" fill="#3B6D11" radius={[3, 3, 0, 0]} isAnimationActive={false} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
